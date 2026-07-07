@@ -1649,7 +1649,7 @@ function getCachedUrl(item) {
         return v.url;
     }
     var url = URL.createObjectURL(item.file);
-    _urlLru.set(key, { url: url });
+    _urlLru.set(key, { url: url, file: item.file }); // FIX: Simpan file reference
     if (_urlLru.size > URL_LRU_MAX) {
         var oldestKey = _urlLru.keys().next().value;
         var old = _urlLru.get(oldestKey);
@@ -1660,7 +1660,8 @@ function getCachedUrl(item) {
 }
 function releaseCachedUrl(path) {
     if (_urlLru.has(path)) {
-        URL.revokeObjectURL(_urlLru.get(path).url);
+        var entry = _urlLru.get(path);
+        URL.revokeObjectURL(entry.url);
         _urlLru.delete(path);
     }
 }
@@ -2324,6 +2325,9 @@ function removeExcelFile(fileId) {
         _excelRowPhotos = [];
         _excelFoundCount = 0;
 
+        // FIX: Clear debounce timer saat reset
+        clearExcelFilterDebounce();
+
         var zone = document.getElementById('excel-zone');
         zone.classList.remove('loaded');
         document.getElementById('excel-icon').textContent = '📊';
@@ -2447,6 +2451,13 @@ var _efDebounce = null;
 function triggerExcelFilter() {
     clearTimeout(_efDebounce);
     _efDebounce = setTimeout(applyExcelFilter, 150);
+}
+// FIX: Clear debounce timer saat reset data excel
+function clearExcelFilterDebounce() {
+    if (_efDebounce) {
+        clearTimeout(_efDebounce);
+        _efDebounce = null;
+    }
 }
 
 // ── Referensi pencarian tambahan utk Item Name (tag/chip, digabung dgn logika OR) ──
@@ -2929,8 +2940,13 @@ function showToast(msg, type) {
     t.style.color = c.text;
     t.textContent = msg;
     t.style.opacity = '1';
+    // FIX: Clear existing timer dan buat baru agar toast tidak hilang terlalu cepat
     clearTimeout(_toastTimer);
-    _toastTimer = setTimeout(function() { t.style.opacity = '0'; }, 3000);
+    _toastTimer = setTimeout(function() { 
+        t.style.opacity = '0';
+        // Hapus elemen setelah animasi fade-out selesai
+        setTimeout(function() { if (t && t.parentNode) t.parentNode.removeChild(t); }, 300);
+    }, 3000);
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
