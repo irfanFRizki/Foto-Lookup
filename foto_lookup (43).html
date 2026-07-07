@@ -1,0 +1,2962 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foto Lookup</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+    --bg:        #0d0f12;
+    --surface:   #151820;
+    --card:      #1c2030;
+    --input-bg:  #111420;
+    --border:    #2a2f45;
+    --border-hi: #3d4560;
+    --text:      #e2e8f0;
+    --muted:     #525c70;
+    --sec:       #8892a4;
+    --green:     #00e5a0;
+    --cyan:      #00c8e0;
+    --amber:     #f59e0b;
+    --red:       #ef4444;
+    --purple:    #a78bfa;
+    --blue:      #3b82f6;
+    --green-glow: 0 0 20px rgba(0,229,160,0.25);
+    --cyan-glow:  0 0 20px rgba(0,200,224,0.2);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+    scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overscroll-behavior: contain;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.topbar-logo {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: var(--green);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+.topbar-sep { flex: 1; }
+.badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 5px;
+    border: 1px solid;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+.badge-green  { color: var(--green);  border-color: rgba(0,229,160,0.35); background: rgba(0,229,160,0.08); }
+.badge-amber  { color: var(--amber);  border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.08); }
+.badge-muted  { color: var(--muted);  border-color: var(--border); background: transparent; }
+.badge-red    { color: var(--red);    border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); }
+
+/* ── MAIN LAYOUT ── */
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 24px 20px 40px;
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+    gap: 20px;
+}
+@media (min-width: 1000px) {
+    .main { padding: 24px 32px 40px; }
+}
+
+/* ── FOLDER PICKER ── */
+.picker-row {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+}
+.picker-row .folder-zone,
+.picker-row .excel-zone {
+    flex: 1 1 0;
+    min-width: 0;
+}
+@media (max-width: 700px) {
+    .picker-row { flex-direction: column; }
+}
+
+.folder-zone {
+    border: 2px dashed var(--border-hi);
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 32px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+}
+.folder-zone:hover, .folder-zone.drag-over {
+    border-color: var(--cyan);
+    background: rgba(0,200,224,0.04);
+}
+.folder-zone.loaded {
+    border-color: var(--green);
+    border-style: solid;
+    background: rgba(0,229,160,0.04);
+    cursor: default;
+}
+.folder-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.folder-zone.loaded input[type=file] { cursor: default; pointer-events: none; }
+
+.folder-icon { font-size: 2.5rem; margin-bottom: 10px; line-height: 1; }
+.folder-title {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+.folder-sub { font-size: 0.78rem; color: var(--sec); }
+
+/* Progress bar */
+.progress-wrap {
+    height: 4px;
+    background: var(--border);
+    border-radius: 99px;
+    margin-top: 14px;
+    overflow: hidden;
+    display: none;
+}
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--cyan), var(--green));
+    border-radius: 99px;
+    width: 0%;
+    transition: width 0.15s;
+}
+
+/* ── EXCEL ZONE ── */
+.excel-zone {
+    border: 2px dashed var(--border-hi);
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+}
+.excel-zone:hover { border-color: var(--purple); background: rgba(167,139,250,0.04); }
+.excel-zone.loaded { border-color: var(--purple); border-style: solid; background: rgba(167,139,250,0.04); cursor: default; }
+.excel-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.excel-zone.loaded input[type=file] { cursor: pointer; pointer-events: auto; }
+.excel-icon { font-size: 2rem; margin-bottom: 8px; line-height: 1; }
+.excel-title { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 0.86rem; color: var(--text); margin-bottom: 4px; }
+.excel-sub { font-size: 0.76rem; color: var(--sec); }
+
+.excel-file-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 10px;
+}
+.excel-file-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--input-bg, rgba(255,255,255,0.04));
+    border: 1px solid var(--border-hi);
+    border-radius: 99px;
+    padding: 4px 6px 4px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--sec);
+    max-width: 220px;
+}
+.excel-file-chip .efc-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.excel-file-chip .efc-rows {
+    color: var(--muted);
+    flex-shrink: 0;
+}
+.excel-file-chip button {
+    flex-shrink: 0;
+    background: rgba(239,68,68,0.12);
+    border: none;
+    color: var(--red);
+    width: 18px;
+    height: 18px;
+    line-height: 1;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.72rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.excel-file-chip button:hover { background: rgba(239,68,68,0.25); }
+
+.excel-config {
+    display: none !important;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    gap: 12px;
+    flex-direction: column;
+}
+.excel-config-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.excel-config-label { font-family: 'Space Mono', monospace; font-size: 0.72rem; color: var(--sec); white-space: nowrap; min-width: 130px; }
+.excel-select {
+    flex: 1;
+    min-width: 160px;
+    background: var(--input-bg);
+    border: 1px solid var(--border-hi);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    padding: 8px 10px;
+    outline: none;
+}
+.excel-select:focus { border-color: var(--purple); }
+.btn-excel-go {
+    background: linear-gradient(135deg, rgba(167,139,250,0.18), rgba(0,200,224,0.1));
+    border: 1px solid rgba(167,139,250,0.45);
+    border-radius: 8px;
+    color: var(--purple);
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 0.78rem;
+    padding: 9px 18px;
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: 0.03em;
+}
+.btn-excel-go:hover { background: linear-gradient(135deg, rgba(167,139,250,0.3), rgba(0,200,224,0.18)); }
+
+/* ── FILTER KOLOM EXCEL ── */
+.excel-filter-bar {
+    display: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    flex-direction: column;
+    gap: 14px;
+}
+.excel-filter-title {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--cyan);
+    letter-spacing: 0.04em;
+}
+.excel-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 12px;
+}
+.excel-filter-grid .filter-field label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--sec);
+    white-space: nowrap;
+}
+.excel-filter-grid input.excel-select::placeholder { color: var(--muted); }
+
+/* ── TABEL EXCEL + FOTO ── */
+.excel-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+.excel-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.excel-table thead th {
+    background: var(--surface);
+    color: var(--sec);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    position: sticky; top: 0;
+}
+.excel-table tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: middle;
+}
+.excel-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+.excel-table tbody tr.row-notfound td { opacity: 0.5; }
+.excel-photo-cell { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.excel-thumb {
+    width: 44px; height: 44px;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 6px;
+    border: 1px solid var(--border-hi);
+    cursor: zoom-in;
+    flex-shrink: 0;
+}
+.excel-thumb-more {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.66rem;
+    color: var(--muted);
+}
+.excel-nf { font-family: 'Space Mono', monospace; font-size: 0.68rem; color: var(--red); }
+.excel-kode-cell { font-family: 'Space Mono', monospace; font-weight: 700; color: var(--cyan); }
+
+/* ── GALLERY CARD (ala AppSheet, dipakai untuk hasil Excel + Foto) ── */
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-top: 14px;
+}
+@media (min-width: 768px) {
+    .gallery-grid { gap: 20px; }
+}
+.gallery-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.22s cubic-bezier(0.34,1.2,0.64,1), border-color 0.22s, box-shadow 0.22s;
+    cursor: zoom-in;
+    position: relative;
+    /* Sama seperti .foto-card: skip layout/paint untuk kartu jauh di luar viewport. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 380px;
+    contain: layout paint style;
+}
+.gallery-card:hover:not(.excel-card-empty) {
+    transform: translateY(-4px);
+    border-color: var(--cyan);
+    box-shadow: var(--cyan-glow);
+    will-change: transform;
+}
+/* Kartu yang sudah dekat viewport di-promote ke GPU layer via _proximityObserver
+   (sama seperti .foto-card) — sebelumnya gallery-card tidak pernah didaftarkan
+   ke observer ini, jadi will-change tidak pernah aktif otomatis. */
+.gallery-card[data-gpu] { will-change: transform; }
+.gallery-card.excel-card-empty { cursor: default; opacity: 0.55; }
+.gallery-card.has-dup {
+    box-shadow: 4px 4px 0 0 var(--border-hi);
+}
+.gallery-card.has-dup:hover:not(.excel-card-empty) {
+    box-shadow: 4px 4px 0 0 var(--cyan);
+}
+.excel-badge-stack {
+    background: var(--amber);
+    color: #1a1200;
+    border: none;
+}
+.gallery-img-container {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+}
+@media (min-width: 768px) {
+    .gallery-img-container { height: 420px; }
+}
+.gallery-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scale(1.35);
+    transition: transform 0.25s ease;
+}
+.gallery-card:hover .gallery-img { transform: scale(1.45); }
+.excel-card-noimg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+.excel-card-noimg span:first-child { font-size: 1.6rem; }
+.gallery-badge-row { position: absolute; bottom: 8px; left: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+.gallery-badge {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 5px;
+    letter-spacing: 0.03em;
+}
+.excel-badge-kode {
+    background: rgba(13,15,18,0.8);
+    color: var(--green);
+    border: 1px solid rgba(0,229,160,0.3);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.excel-badge-more {
+    background: var(--amber);
+    color: #0d0f12;
+    border: none;
+}
+.gallery-info { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; flex-grow: 1; }
+.gallery-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.2em;
+}
+.excel-nf-inline { color: var(--muted); font-style: italic; font-weight: 400; }
+
+/* ── SWITCH TOGGLE (Tabel/Gallery) ── */
+.switch-container {
+    display: inline-flex;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    padding: 3px;
+    gap: 4px;
+}
+.switch-btn {
+    padding: 5px 12px;
+    border-radius: 9999px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+}
+.switch-btn.active {
+    background: linear-gradient(135deg, var(--green), var(--cyan));
+    color: #0d0f12;
+}
+
+/* ── SCAN AREA ── */
+.scan-wrap {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+}
+.scan-input {
+    flex: 1;
+    background: var(--input-bg);
+    border: 2px solid var(--border-hi);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    padding: 12px 16px;
+    outline: none;
+    letter-spacing: 0.04em;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.scan-input:focus {
+    border-color: var(--green);
+    box-shadow: var(--green-glow);
+}
+.scan-input::placeholder { color: var(--muted); font-weight: 400; font-size: 0.88rem; }
+.scan-input:disabled { opacity: 0.4; }
+
+.btn-scan {
+    background: linear-gradient(135deg, rgba(0,229,160,0.15), rgba(0,200,224,0.1));
+    border: 1px solid rgba(0,229,160,0.4);
+    border-radius: 10px;
+    color: var(--green);
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 0.82rem;
+    padding: 12px 20px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, box-shadow 0.15s;
+    letter-spacing: 0.04em;
+}
+.btn-scan:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(0,229,160,0.25), rgba(0,200,224,0.18));
+    box-shadow: var(--green-glow);
+}
+.btn-scan:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── HASIL ── */
+.hasil-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+.hasil-kode {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--cyan);
+    letter-spacing: 0.05em;
+}
+.hasil-count { font-size: 0.75rem; color: var(--sec); }
+
+/* Foto grid */
+.foto-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-top: 14px;
+}
+@media (min-width: 768px) {
+    .foto-grid { gap: 20px; }
+}
+.foto-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    cursor: zoom-in;
+    transition: transform 0.22s cubic-bezier(0.34,1.2,0.64,1), border-color 0.22s, box-shadow 0.22s;
+    position: relative;
+    /* Chrome berhenti melakukan layout/paint untuk kartu yang jauh di luar
+       viewport (mirip efek virtual-scrolling tapi tanpa perlu bongkar DOM).
+       contain-intrinsic-size = perkiraan tinggi kartu sebelum pernah dirender,
+       supaya scrollbar/scroll position tidak "lompat". */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 380px;
+    contain: layout paint style;
+}
+.foto-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--cyan);
+    box-shadow: var(--cyan-glow);
+    will-change: transform;
+}
+.foto-img-wrap {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+}
+@media (min-width: 768px) {
+    .foto-img-wrap { height: 420px; }
+}
+.foto-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scale(1.35);
+    transition: transform 0.25s ease;
+}
+.foto-card:hover img { transform: scale(1.45); }
+
+/* Card yang sudah dekat viewport di-promote ke GPU layer via JS _proximityObserver */
+.foto-card[data-gpu] { will-change: transform; }
+.foto-badge-kode {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: rgba(13,15,18,0.8);
+    color: var(--green);
+    border: 1px solid rgba(0,229,160,0.3);
+    letter-spacing: 0.03em;
+    max-width: calc(100% - 16px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.foto-card.has-dup {
+    /* Dulu 4 layer box-shadow bertumpuk (offset sampai 12px) → tiap scroll
+       Chrome harus repaint area yang jauh lebih besar dari kartunya sendiri.
+       Sekarang 1 layer offset kecil, efek "kartu bertumpuk" tetap kelihatan
+       tapi area repaint jauh lebih kecil & ringan. */
+    box-shadow: 4px 4px 0 0 var(--border-hi);
+}
+.foto-card.has-dup:hover {
+    box-shadow: 4px 4px 0 0 var(--cyan);
+}
+.foto-badge-kode.has-dup { cursor: pointer; }
+.foto-badge-kode.has-dup:hover { border-color: var(--amber); color: var(--amber); }
+.foto-badge-dup-count {
+    display: inline-block;
+    margin-left: 5px;
+    background: var(--amber);
+    color: #1a1200;
+    font-size: 0.58rem;
+    font-weight: 700;
+    padding: 0px 5px;
+    border-radius: 8px;
+    letter-spacing: 0;
+}
+
+.foto-info { padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.foto-card .foto-path {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.64rem;
+    color: var(--muted);
+    word-break: break-all;
+    line-height: 1.5;
+}
+.foto-card .foto-folder {
+    font-size: 0.7rem;
+    color: var(--amber);
+    font-weight: 600;
+    display: block;
+    margin-bottom: 1px;
+}
+
+/* Skeleton */
+.skeleton {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, var(--card) 25%, var(--surface) 50%, var(--card) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* Tidak ditemukan */
+.not-found {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+}
+.not-found .nf-icon { font-size: 2.5rem; margin-bottom: 10px; }
+.not-found .nf-kode {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--red);
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.not-found .nf-sub { font-size: 0.8rem; color: var(--sec); }
+
+/* ── LIGHTBOX ── */
+.lightbox {
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(0,0,0,0.92);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px;
+}
+.lightbox.active { display: flex; }
+.lightbox-content {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 18px;
+    width: 100%;
+    max-width: 1200px;
+    max-height: 90vh;
+}
+.lb-media {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.lb-img-wrap {
+    position: relative;
+    max-width: 100%;
+    max-height: 76vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+}
+.lightbox img {
+    max-width: 100%;
+    max-height: 76vh;
+    object-fit: contain;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 8px 60px rgba(0,0,0,0.8);
+    transition: transform 0.06s ease-out;
+    cursor: zoom-in;
+    user-select: none;
+    -webkit-user-drag: none;
+    touch-action: none;
+}
+.lightbox img.lb-zoomed { cursor: grab; }
+.lightbox img.lb-zoomed:active { cursor: grabbing; }
+.lightbox-zoom-hint {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.64rem;
+    color: var(--muted);
+    text-align: center;
+}
+.lightbox-path {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--sec);
+    text-align: center;
+    max-width: 600px;
+    word-break: break-all;
+}
+.lightbox-close {
+    position: fixed;
+    top: 16px; right: 20px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    font-size: 1.2rem;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1;
+}
+.lightbox-nav {
+    display: flex; gap: 10px;
+}
+.lightbox-nav button {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.lightbox-nav button:hover { background: rgba(255,255,255,0.16); }
+
+.lightbox-excel-panel {
+    display: none;
+    width: 300px;
+    flex: 0 0 300px;
+    max-height: 82vh;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--border-hi);
+    border-radius: 10px;
+    padding: 12px 14px;
+    align-self: flex-start;
+}
+@media (max-width: 900px) {
+    .lightbox-content { flex-direction: column; align-items: center; max-height: none; overflow-y: auto; }
+    .lightbox-excel-panel { width: 100%; max-width: 600px; flex: 0 0 auto; max-height: 26vh; }
+}
+.lb-excel-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 8px;
+}
+.lb-excel-row { padding: 6px 0; }
+.lb-excel-divider { border-top: 1px dashed var(--border); margin: 4px 0; }
+.lb-excel-field {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 0;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+}
+.lb-excel-label { color: var(--sec); flex-shrink: 0; }
+.lb-excel-value { color: var(--text); text-align: right; word-break: break-word; }
+.lb-excel-field.lb-excel-highlight .lb-excel-value { color: var(--green); font-weight: 700; }
+
+/* ── SEARCH CARD (ala index.html) ── */
+.search-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+}
+.search-row { display: flex; gap: 8px; }
+.search-input-wrap { position: relative; flex-grow: 1; }
+.search-icon {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.85rem;
+    opacity: 0.5;
+    pointer-events: none;
+}
+.search-input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 2px solid var(--border-hi);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    padding: 11px 14px 11px 34px;
+    outline: none;
+    letter-spacing: 0.03em;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.search-input:focus { border-color: var(--green); box-shadow: var(--green-glow); }
+.search-input::placeholder { color: var(--muted); font-weight: 400; font-size: 0.85rem; }
+.search-input:disabled { opacity: 0.4; }
+
+.btn-filter-toggle {
+    background: var(--card);
+    border: 1px solid var(--border-hi);
+    border-radius: 10px;
+    color: var(--sec);
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 0.76rem;
+    padding: 0 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s;
+}
+.btn-filter-toggle:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+.btn-filter-toggle:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-filter-toggle.open { border-color: var(--green); color: var(--green); }
+
+.filter-panel {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+.filter-field { display: flex; flex-direction: column; gap: 5px; }
+.filter-field label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    font-weight: 700;
+}
+.filter-field select {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.76rem;
+    padding: 8px 10px;
+    outline: none;
+}
+.filter-field select:focus { border-color: var(--cyan); }
+
+.ef-tag-input-row { display: flex; gap: 6px; }
+.ef-tag-input-row input { flex: 1 1 auto; min-width: 0; }
+.ef-tag-add-btn {
+    flex: 0 0 auto;
+    width: 34px;
+    background: var(--card);
+    border: 1px solid var(--border-hi);
+    border-radius: 8px;
+    color: var(--green);
+    font-family: 'Space Mono', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+}
+.ef-tag-add-btn:hover { border-color: var(--green); background: rgba(46, 204, 113, 0.08); }
+.ef-tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+.ef-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card);
+    border: 1px solid var(--border-hi);
+    border-radius: 99px;
+    padding: 3px 8px 3px 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--sec);
+}
+.ef-tag button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.78rem;
+    line-height: 1;
+    padding: 0;
+}
+.ef-tag button:hover { color: var(--red); }
+
+/* ── RIWAYAT CHIPS ── */
+.riwayat-wrap {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.riwayat-label { font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
+.chip {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 99px;
+    background: var(--card);
+    border: 1px solid var(--border-hi);
+    color: var(--sec);
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s;
+    letter-spacing: 0.03em;
+}
+.chip:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* Empty state awal */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 60px 20px;
+    color: var(--muted);
+    text-align: center;
+}
+.empty-state .es-icon { font-size: 3rem; margin-bottom: 6px; }
+.empty-state .es-title { font-size: 0.9rem; font-weight: 600; color: var(--sec); }
+.empty-state .es-sub { font-size: 0.78rem; line-height: 1.6; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Grid smooth anchor scroll */
+.foto-grid, .gallery-grid {
+    scroll-margin-top: 60px;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 540px) {
+    .foto-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .scan-input { font-size: 1rem; }
+    .topbar { height: 46px; padding: 0 14px; }
+    .main { padding: 16px 14px 40px; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+    <div class="topbar-logo">📷 FOTO LOOKUP</div>
+    <div class="topbar-sep"></div>
+    <div id="badge-folder" class="badge badge-amber">Belum ada folder</div>
+    <div id="badge-count" class="badge badge-muted" style="display:none"></div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+    <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+    <div class="lightbox-content" onclick="event.stopPropagation()">
+        <div class="lb-media">
+            <div class="lb-img-wrap" id="lb-img-wrap">
+                <img id="lb-img" src="" alt="">
+            </div>
+            <div id="lb-path" class="lightbox-path"></div>
+            <div class="lightbox-zoom-hint">🔍 Scroll mouse untuk zoom in/out • drag utk geser • dobel klik reset</div>
+            <div class="lightbox-nav">
+                <button onclick="lbNav(-1)">◀ Prev</button>
+                <span id="lb-counter" style="font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--muted);align-self:center"></span>
+                <button onclick="lbNav(1)">Next ▶</button>
+            </div>
+        </div>
+        <div id="lb-excel-panel" class="lightbox-excel-panel"></div>
+    </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+    <!-- 1. FOLDER + EXCEL PICKER (satu baris) -->
+<div class="picker-row">
+    <div class="folder-zone" id="folder-zone"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <input type="file" id="folder-input" webkitdirectory directory multiple
+               onchange="handleFolderInput(this.files)">
+        <div class="folder-icon" id="folder-icon">📁</div>
+        <div class="folder-title" id="folder-title">Pilih atau Drop Folder Y:\</div>
+        <div class="folder-sub" id="folder-sub">Klik di sini → pilih folder → browser scan semua gambar otomatis</div>
+        <div class="progress-wrap" id="progress-wrap">
+            <div class="progress-bar" id="progress-bar"></div>
+        </div>
+    </div>
+
+    <div class="excel-zone" id="excel-zone">
+        <input type="file" id="excel-input" accept=".xlsx,.xls,.csv" multiple
+               onchange="handleExcelInput(this.files)">
+        <div class="excel-icon" id="excel-icon">📊</div>
+        <div class="excel-title" id="excel-title">Pilih File Excel (kode barang)</div>
+        <div class="excel-sub" id="excel-sub">Klik di sini → bisa pilih beberapa file .xlsx/.xls/.csv sekaligus, atau tambah lagi kapan saja</div>
+        <div class="progress-wrap" id="excel-progress-wrap">
+            <div class="progress-bar" id="excel-progress-bar"></div>
+        </div>
+        <div class="excel-file-list" id="excel-file-list"></div>
+    </div>
+</div>
+
+    <!-- Konfigurasi kolom excel (otomatis, disembunyikan dari tampilan) -->
+    <div class="excel-config" id="excel-config">
+        <div class="excel-config-row">
+            <span class="excel-config-label">Sheet:</span>
+            <select class="excel-select" id="excel-sheet-select"></select>
+        </div>
+        <div class="excel-config-row">
+            <span class="excel-config-label">Kolom Kode Barang:</span>
+            <select class="excel-select" id="excel-kode-select"></select>
+        </div>
+        <div class="excel-config-row">
+            <span class="excel-config-label">Baris Header:</span>
+            <select class="excel-select" id="excel-header-select"></select>
+            <button class="btn-excel-go" onclick="tampilkanTabelExcel()">▶ TAMPILKAN DATA + FOTO</button>
+        </div>
+    </div>
+
+    <!-- 1d. FILTER KOLOM EXCEL -->
+    <div class="excel-filter-bar" id="excel-filter-bar">
+        <div class="excel-filter-title">🔎 Filter Data Excel</div>
+        <div class="excel-filter-grid">
+            <div class="filter-field" id="ef-wrap-packinglist">
+                <label>Packing List</label>
+                <input class="excel-select" type="text" id="ef-packinglist" placeholder="Cari Packing List…" oninput="triggerExcelFilter()">
+            </div>
+            <div class="filter-field" id="ef-wrap-tahun">
+                <label>Tahun</label>
+                <select class="excel-select" id="ef-tahun" onchange="applyExcelFilter()">
+                    <option value="">Semua</option>
+                </select>
+            </div>
+            <div class="filter-field" id="ef-wrap-category">
+                <label>Category</label>
+                <input class="excel-select" type="text" id="ef-category" placeholder="Cari Category…" oninput="triggerExcelFilter()">
+            </div>
+            <div class="filter-field" id="ef-wrap-spn">
+                <label>Supplier Part Number</label>
+                <input class="excel-select" type="text" id="ef-spn" placeholder="Cari SPN…" oninput="triggerExcelFilter()">
+            </div>
+            <div class="filter-field" id="ef-wrap-name">
+                <label>Kode</label>
+                <input class="excel-select" type="text" id="ef-name" placeholder="Cari Kode…" oninput="triggerExcelFilter()">
+            </div>
+            <div class="filter-field" id="ef-wrap-itemname">
+                <label>Descripsi</label>
+                <div class="ef-tag-input-row">
+                    <input class="excel-select" type="text" id="ef-itemname" placeholder="Cari Descripsi…"
+                           oninput="triggerExcelFilter()" onkeydown="efItemNameKeydown(event)">
+                    <button type="button" class="ef-tag-add-btn" title="Tambah referensi pencarian Descripsi" onclick="addEfItemNameTag()">+</button>
+                </div>
+                <div class="ef-tag-list" id="ef-itemname-tags"></div>
+            </div>
+            <div class="filter-field" id="ef-wrap-rmb">
+                <label>Rmb</label>
+                <input class="excel-select" type="text" id="ef-rmb" placeholder="Cari Rmb…" oninput="triggerExcelFilter()">
+            </div>
+        </div>
+        <button class="btn-excel-go" id="ef-reset-btn" onclick="resetExcelFilter()" style="align-self:flex-start">✕ Reset Filter</button>
+    </div>
+
+    <!-- 1c. TABEL EXCEL + FOTO -->
+    <div id="excel-hasil-area"></div>
+
+    <!-- 2. PENCARIAN + FILTER (ala index.html) -->
+    <div class="search-card" id="search-card">
+        <div class="search-row">
+            <div class="search-input-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-input" id="scan-input"
+                       placeholder="Scan atau ketik kode / nama file…"
+                       disabled autocomplete="off" autocorrect="off" spellcheck="false"
+                       oninput="triggerFotoSearch()"
+                       onkeydown="if(event.key==='Enter') triggerFotoSearch()">
+            </div>
+            <button class="btn-filter-toggle" id="btn-filter-toggle" onclick="toggleFilterPanel()" disabled>
+                <span>⚙️</span><span>Filter</span>
+            </button>
+        </div>
+
+        <!-- Panel filter expandable -->
+        <div class="filter-panel" id="filter-panel" style="display:none">
+            <div class="filter-field">
+                <label>Mode Pencarian</label>
+                <span class="switch-container">
+                    <button class="switch-btn active" id="mode-btn-partial" onclick="setSearchMode('partial')">Sebagian</button>
+                    <button class="switch-btn" id="mode-btn-exact" onclick="setSearchMode('exact')">Persis</button>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Riwayat pencarian -->
+    <div id="riwayat-area" style="display:none">
+        <div class="riwayat-wrap">
+            <span class="riwayat-label">Terakhir:</span>
+            <div id="riwayat-chips"></div>
+        </div>
+    </div>
+
+    <!-- 3. HASIL -->
+    <div id="hasil-area"></div>
+
+
+</div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────────────────────
+var _index = {};          // { baseKode: [ { path, file } ] }
+var _allItems = [];       // flat semua foto: { path, file, base, folder }
+var _totalFiles = 0;
+var _ready = false;
+var _riwayat = [];        // array kode yang pernah dicari
+var _lbUrls = [];         // urls aktif di lightbox
+var _lbIdx  = 0;
+
+// ── STATE EXCEL ───────────────────────────────────────────────────────────────
+var _excelWorkbook = null;
+var _excelSheetName = '';
+var _excelAllRows = [];   // semua baris mentah (array of array) dari sheet terpilih
+var _excelHeaderRowIdx = 0;
+var _excelHeaders = [];
+var _excelKodeColIdx = 0;
+
+// ── IMAGE EXTENSIONS ──────────────────────────────────────────────────────────
+var IMG_EXT = /\.(jpe?g|png|webp|gif|bmp)$/i;
+
+// ── FOLDER HANDLING ───────────────────────────────────────────────────────────
+function onDragOver(e) {
+    e.preventDefault();
+    document.getElementById('folder-zone').classList.add('drag-over');
+}
+function onDragLeave(e) {
+    document.getElementById('folder-zone').classList.remove('drag-over');
+}
+function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('folder-zone').classList.remove('drag-over');
+
+    var items = e.dataTransfer.items;
+    if (!items || items.length === 0) {
+        showToast('Tidak ada item terbaca dari drop.', 'red');
+        return;
+    }
+
+    // Ambil entries dulu (harus sinkron, sebelum event berakhir)
+    var entries = [];
+    for (var i = 0; i < items.length; i++) {
+        var entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+        if (entry) entries.push(entry);
+    }
+
+    if (entries.length === 0) {
+        showToast('Browser ini tidak mendukung drop folder. Pakai tombol klik untuk pilih folder.', 'amber');
+        return;
+    }
+
+    document.getElementById('folder-icon').textContent = '⏳';
+    document.getElementById('folder-title').textContent = 'Membaca struktur folder…';
+    document.getElementById('folder-sub').textContent = 'Menelusuri subfolder, mohon tunggu…';
+
+    var allImgs = [];
+    var pending = 0;
+
+    function finish() {
+        console.log('[FotoLookup] Drag-drop selesai traversal, gambar ditemukan:', allImgs.length);
+        if (allImgs.length === 0) {
+            document.getElementById('folder-icon').textContent = '📁';
+            document.getElementById('folder-title').textContent = 'Pilih atau Drop Folder Y:\\';
+            document.getElementById('folder-sub').textContent = 'Klik di sini → pilih folder → browser scan semua gambar otomatis';
+            showToast('Tidak ada file gambar ditemukan di folder yang di-drop.', 'red');
+            return;
+        }
+        _totalFiles = allImgs.length;
+        buildIndex(allImgs);
+    }
+
+    function inc() { pending++; }
+    function dec() { pending--; if (pending === 0) finish(); }
+
+    function walkEntry(entry, basePath) {
+        if (entry.isFile) {
+            inc();
+            entry.file(function(file) {
+                var relPath = basePath + file.name;
+                if (IMG_EXT.test(file.name)) {
+                    allImgs.push({ path: relPath, file: file });
+                    if (allImgs.length % 200 === 0) {
+                        document.getElementById('folder-sub').textContent = allImgs.length.toLocaleString('id-ID') + ' gambar ditemukan sejauh ini…';
+                    }
+                }
+                dec();
+            }, function(err) {
+                console.error('[FotoLookup] Error baca file:', err);
+                dec();
+            });
+        } else if (entry.isDirectory) {
+            inc(); // pending untuk proses pembacaan direktori ini selesai
+            var dirReader = entry.createReader();
+            var newBase = basePath + entry.name + '/';
+            function readBatch() {
+                dirReader.readEntries(function(results) {
+                    if (results.length === 0) {
+                        dec(); // direktori ini selesai dibaca penuh
+                        return;
+                    }
+                    results.forEach(function(child) { walkEntry(child, newBase); });
+                    readBatch(); // readEntries() dibatasi ~100/panggilan, lanjut baca batch berikutnya
+                }, function(err) {
+                    console.error('[FotoLookup] Error baca direktori:', err);
+                    dec();
+                });
+            }
+            readBatch();
+        }
+    }
+
+    entries.forEach(function(entry) { walkEntry(entry, ''); });
+}
+
+function handleFolderInput(files) {
+    console.log('[FotoLookup] handleFolderInput dipanggil, jumlah files:', files ? files.length : 0);
+
+    if (!files || files.length === 0) {
+        showToast('Tidak ada file terbaca dari folder. Coba browser lain (Chrome/Edge) atau pilih ulang.', 'red');
+        return;
+    }
+
+    // Feedback instan supaya user tahu proses sedang jalan
+    // (penting kalau folder-nya besar / network drive, filtering bisa makan waktu)
+    document.getElementById('folder-icon').textContent = '⏳';
+    document.getElementById('folder-title').textContent = 'Membaca folder… (' + files.length.toLocaleString('id-ID') + ' file ditemukan)';
+    document.getElementById('folder-sub').textContent = 'Memfilter gambar, mohon tunggu…';
+
+    // Kasih browser kesempatan repaint dulu sebelum loop berat
+    setTimeout(function() {
+        try {
+            var allImgs = [];
+            for (var i = 0; i < files.length; i++) {
+                var f = files[i];
+                var relPath = f.webkitRelativePath || f.name;
+                if (IMG_EXT.test(f.name)) {
+                    allImgs.push({ path: relPath, file: f });
+                }
+            }
+
+            console.log('[FotoLookup] Gambar ditemukan:', allImgs.length);
+
+            if (allImgs.length === 0) {
+                document.getElementById('folder-icon').textContent = '📁';
+                document.getElementById('folder-title').textContent = 'Pilih atau Drop Folder Y:\\';
+                document.getElementById('folder-sub').textContent = 'Klik di sini → pilih folder → browser scan semua gambar otomatis';
+                showToast('Tidak ada file gambar (.jpg/.png/dll) ditemukan di folder tersebut.', 'red');
+                return;
+            }
+
+            _totalFiles = allImgs.length;
+            buildIndex(allImgs);
+        } catch (err) {
+            console.error('[FotoLookup] Error saat memproses folder:', err);
+            showToast('Gagal membaca folder: ' + err.message, 'red');
+        }
+    }, 30);
+}
+
+// ── DEDUPE FOTO VARIAN (sama kode, suffix "-1"/"-2"/"(1)"/dst) ────────────────
+// Kalau ada "0121010103.jpg", "0121010103-1.jpg", "0121010103 (1).jpg", itu
+// dianggap foto yang sama (varian) → cuma dipakai satu. Prioritas: versi TANPA
+// suffix (kode polos) kalau ada; kalau tidak ada, ambil suffix angka terkecil.
+// Digabung LINTAS FOLDER: kode yang sama di folder berbeda (mis. "XUPING /
+// Originals" vs "XUPING / ANTING XP / ANTING TUSUK") dianggap 1 kode = 1 foto
+// total, bukan per folder.
+var _dupCount = 0;
+function canonicalCode(base) {
+    var s = base;
+    var prev;
+    do {
+        prev = s;
+        // strip trailing " (1)", "(2)", dst
+        s = s.replace(/\s*\(\d+\)\s*$/, '');
+        // strip trailing " -1", "-2", dst (spasi sebelum tanda "-" opsional)
+        s = s.replace(/\s*-\d+\s*$/, '');
+        s = s.trim();
+    } while (s !== prev);
+    return s;
+}
+function dedupeByCode(items) {
+    var groups = {};   // kanonikal → [{item, base}]
+    var order = [];    // urutan kemunculan grup, supaya hasil tetap stabil
+    for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var parts = item.path.split('/');
+        var base = parts[parts.length - 1].replace(/\.[^.]+$/, '');
+        var canon = canonicalCode(base);
+        var key = canon;
+        if (!groups[key]) { groups[key] = []; order.push(key); }
+        groups[key].push({ item: item, base: base });
+    }
+    var result = [];
+    var dupCount = 0;
+    for (var g = 0; g < order.length; g++) {
+        var arr = groups[order[g]];
+        if (arr.length === 1) { result.push(arr[0].item); continue; }
+        var canon = order[g];
+        var chosen = null;
+        for (var j = 0; j < arr.length; j++) {
+            if (arr[j].base === canon) { chosen = arr[j]; break; }
+        }
+        if (!chosen) {
+            arr.sort(function(a, b) {
+                var na = parseInt((a.base.match(/-(\d+)\s*$/) || (a.base.match(/\((\d+)\)\s*$/)) || [0, 0])[1], 10);
+                var nb = parseInt((b.base.match(/-(\d+)\s*$/) || (b.base.match(/\((\d+)\)\s*$/)) || [0, 0])[1], 10);
+                return na - nb;
+            });
+            chosen = arr[0];
+        }
+        // Simpan semua ITEM (bukan cuma nama) varian yang digabung, supaya saat
+        // kode-nya diklik nanti bisa ditampilkan foto aslinya satu-satu (bukan cuma teks).
+        var variantItems = arr.map(function(a) { return a.item; })
+            .filter(function(it) { return it !== chosen.item; });
+        variantItems.unshift(chosen.item); // versi terpakai selalu di urutan pertama
+        chosen.item.dupVariants = variantItems;
+        result.push(chosen.item);
+        dupCount += (arr.length - 1);
+    }
+    _dupCount = dupCount;
+    return result;
+}
+
+function buildIndex(items) {
+    items = dedupeByCode(items);
+    _totalFiles = items.length;
+    _index = {};
+    _ready = false;
+
+    // Peringatan + estimasi kalau foldernya sangat besar
+    var LARGE_FOLDER_THRESHOLD = 15000;
+    if (_totalFiles > LARGE_FOLDER_THRESHOLD) {
+        showToast('⚠️ Folder besar terdeteksi: ' + _totalFiles.toLocaleString('id-ID') +
+            ' foto. Proses indexing mungkin makan waktu beberapa saat, mohon tunggu…', 'amber');
+    }
+
+    // UI progress
+    var zone = document.getElementById('folder-zone');
+    zone.classList.add('loaded');
+    zone.querySelector('input[type=file]').style.pointerEvents = 'none';
+    document.getElementById('folder-icon').textContent = '⏳';
+    document.getElementById('folder-title').textContent = 'Membangun index…';
+    document.getElementById('folder-sub').textContent = '0 / ' + _totalFiles + ' file gambar';
+    var pw = document.getElementById('progress-wrap');
+    var pb = document.getElementById('progress-bar');
+    pw.style.display = 'block';
+
+    var CHUNK = 500;
+    var i = 0;
+    var startTime = performance.now();
+
+    function processChunk() {
+        var end = Math.min(i + CHUNK, items.length);
+        for (; i < end; i++) {
+            var item = items[i];
+            var fname = item.file.name;
+            // Nama file tanpa ekstensi = kode kandidat
+            var base = fname.replace(/\.[^.]+$/, '');
+            var keys = normalizeKeys(base);
+            keys.forEach(function(k) {
+                if (!_index[k]) _index[k] = [];
+                _index[k].push(item);
+            });
+        }
+        var pct = Math.round(i / items.length * 100);
+        pb.style.width = pct + '%';
+
+        // Estimasi waktu tersisa berdasarkan kecepatan proses SEJAUH INI (bukan angka statis)
+        var elapsedSec = (performance.now() - startTime) / 1000;
+        var etaText = '';
+        if (elapsedSec > 0.4 && i > 0 && i < items.length) {
+            var rate = i / elapsedSec; // file per detik
+            var remainingSec = Math.round((items.length - i) / rate);
+            if (remainingSec > 0) {
+                etaText = remainingSec >= 60
+                    ? ' • ~' + Math.ceil(remainingSec / 60) + ' menit lagi'
+                    : ' • ~' + remainingSec + ' detik lagi';
+            }
+        }
+        document.getElementById('folder-sub').textContent =
+            i.toLocaleString('id-ID') + ' / ' + _totalFiles.toLocaleString('id-ID') + ' file gambar diindex' + etaText;
+
+        if (i < items.length) {
+            requestAnimationFrame(processChunk);
+        } else {
+            finishIndex(items);
+        }
+    }
+
+    requestAnimationFrame(processChunk);
+}
+
+function finishIndex(items) {
+    _ready = true;
+
+    // Cari nama folder root (level 1 dari path)
+    var rootName = '';
+    if (items[0] && items[0].path) {
+        rootName = items[0].path.split('/')[0];
+    }
+
+    // Bangun daftar flat semua item (untuk pencarian umum)
+    _allItems = items.map(function(item) {
+        var parts = item.path.split('/');
+        var folder = parts.slice(0, -1).join(' / ');
+        var base = parts[parts.length - 1].replace(/\.[^.]+$/, '');
+        return { path: item.path, file: item.file, base: base, folder: folder };
+    });
+
+    // Update UI
+    document.getElementById('folder-icon').textContent = '✅';
+    document.getElementById('folder-title').textContent = rootName || 'Folder dimuat';
+    document.getElementById('folder-sub').textContent = _totalFiles.toLocaleString('id-ID') + ' gambar siap dicari';
+    document.getElementById('badge-folder').className = 'badge badge-green';
+    document.getElementById('badge-folder').textContent = rootName || 'Folder OK';
+    document.getElementById('badge-count').style.display = '';
+    document.getElementById('badge-count').textContent = _totalFiles.toLocaleString() + ' foto';
+    document.getElementById('badge-count').className = 'badge badge-muted';
+    document.getElementById('progress-wrap').style.display = 'none';
+
+    // Enable input & filter
+    document.getElementById('scan-input').disabled = false;
+    document.getElementById('btn-filter-toggle').disabled = false;
+    document.getElementById('scan-input').focus();
+
+    showToast('✅ ' + _totalFiles.toLocaleString() + ' foto diindex — siap dicari!' +
+        (_dupCount > 0 ? ' (' + _dupCount.toLocaleString() + ' duplikat kode ditumpuk jadi 1, klik kode-nya buat lihat semua fotonya)' : ''), 'green');
+
+    // Tampilkan empty state tapi dengan instruksi cari
+    document.getElementById('hasil-area').innerHTML =
+        '<div class="empty-state">' +
+        '<div class="es-icon">🔍</div>' +
+        '<div class="es-title">Index siap</div>' +
+        '<div class="es-sub">Ketik sebagian kode / nama file di kotak atas,<br>hasil akan muncul otomatis.</div>' +
+        '</div>';
+
+    maybeAutoRunExcel();
+}
+
+// ── FILTER PANEL ─────────────────────────────────────────────────────────────
+var _searchMode = 'partial'; // 'partial' | 'exact'
+function toggleFilterPanel() {
+    var panel = document.getElementById('filter-panel');
+    var btn = document.getElementById('btn-filter-toggle');
+    var open = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'grid';
+    btn.classList.toggle('open', !open);
+}
+function setSearchMode(mode) {
+    _searchMode = mode;
+    document.getElementById('mode-btn-partial').classList.toggle('active', mode === 'partial');
+    document.getElementById('mode-btn-exact').classList.toggle('active', mode === 'exact');
+    triggerFotoSearch();
+}
+
+// ── NORMALISASI KODE ──────────────────────────────────────────────────────────
+// Menghasilkan array key yang mungkin untuk satu nama file
+// sehingga berbagai variasi (leading 0, prefix 3, dll) bisa match
+function normalizeKeys(raw) {
+    var s = raw.trim();
+    var keys = new Set();
+    keys.add(s);
+    keys.add(s.toUpperCase());
+    keys.add(s.toLowerCase());
+    // Tanpa leading zeros
+    var stripped = s.replace(/^0+/, '');
+    if (stripped && stripped !== s) { keys.add(stripped); keys.add(stripped.toUpperCase()); }
+    // Tanpa prefix "3" pertama
+    if (s.length > 1 && s[0] === '3') {
+        var sub3 = s.substring(1);
+        keys.add(sub3); keys.add(sub3.toUpperCase());
+    }
+    // Tambah leading 0
+    keys.add('0' + s); keys.add(('0' + s).toUpperCase());
+    return Array.from(keys);
+}
+
+function lookupKode(kode) {
+    var candidates = normalizeKeys(kode.trim());
+    var result = new Map(); // path → item (deduplicate)
+    candidates.forEach(function(k) {
+        var hits = _index[k] || _index[k.toUpperCase()] || _index[k.toLowerCase()] || [];
+        hits.forEach(function(item) {
+            result.set(item.path, item);
+        });
+    });
+    return Array.from(result.values());
+}
+
+// Setiap item hasil lookupKode bisa saja merepresentasikan beberapa file foto
+// yang digabung (lihat dedupeByCode/dupVariants — mis. "112423310.jpg",
+// "112423310-1.jpg" dianggap 1 kode). Untuk kebutuhan Excel (SPN/baris beda
+// tapi kode sama), kita bongkar lagi semua variannya supaya foto-foto itu
+// betulan tampil satu-satu, bukan cuma 1 foto wakilnya saja.
+function expandDupVariants(items) {
+    var seen = {};
+    var out = [];
+    items.forEach(function(item) {
+        var variants = (item.dupVariants && item.dupVariants.length > 1) ? item.dupVariants : [item];
+        variants.forEach(function(v) {
+            if (!seen[v.path]) { seen[v.path] = true; out.push(v); }
+        });
+    });
+    return out;
+}
+
+// ── CARI + FILTER (live search, banyak foto sekaligus) ────────────────────────
+var _searchDebounce = null;
+function triggerFotoSearch() {
+    clearTimeout(_searchDebounce);
+    _searchDebounce = setTimeout(doFotoSearch, 120);
+}
+
+function doFotoSearch() {
+    if (!_ready) return;
+    var inp = document.getElementById('scan-input');
+    var query = inp.value.trim();
+
+    var results;
+    if (!query) {
+        document.getElementById('hasil-area').innerHTML =
+            '<div class="empty-state">' +
+            '<div class="es-icon">🔍</div>' +
+            '<div class="es-title">Index siap</div>' +
+            '<div class="es-sub">Ketik sebagian kode / nama file di kotak atas,<br>hasil akan muncul otomatis.</div>' +
+            '</div>';
+        return;
+    } else if (_searchMode === 'exact') {
+        results = lookupKode(query).map(function(item) {
+            var parts = item.path.split('/');
+            return { path: item.path, file: item.file, base: parts[parts.length - 1].replace(/\.[^.]+$/, ''), folder: parts.slice(0, -1).join(' / ') };
+        });
+    } else {
+        var qLower = query.toLowerCase();
+        results = _allItems.filter(function(it) {
+            return it.base.toLowerCase().indexOf(qLower) !== -1;
+        });
+    }
+
+    results = results.slice().sort(function(a, b) { return a.base.localeCompare(b.base); });
+
+    renderSearchResults(query, results);
+    if (query) tambahRiwayat(query);
+}
+
+// ── RENDER HASIL (grid banyak foto, ala index.html) ──────────────────────────
+// ── LRU OBJECT URL CACHE ──────────────────────────────────────────────────────
+// Membatasi jumlah blob URL + gambar ter-decode yang hidup bersamaan di memori.
+var _urlLru = new Map(); // key(path) → { url, file }
+var URL_LRU_MAX = 120;
+function getCachedUrl(item) {
+    var key = item.path;
+    if (_urlLru.has(key)) {
+        var v = _urlLru.get(key);
+        _urlLru.delete(key); _urlLru.set(key, v); // sentuh → paling baru dipakai
+        return v.url;
+    }
+    var url = URL.createObjectURL(item.file);
+    _urlLru.set(key, { url: url });
+    if (_urlLru.size > URL_LRU_MAX) {
+        var oldestKey = _urlLru.keys().next().value;
+        var old = _urlLru.get(oldestKey);
+        URL.revokeObjectURL(old.url);
+        _urlLru.delete(oldestKey);
+    }
+    return url;
+}
+function releaseCachedUrl(path) {
+    if (_urlLru.has(path)) {
+        URL.revokeObjectURL(_urlLru.get(path).url);
+        _urlLru.delete(path);
+    }
+}
+
+// ── THUMBNAIL ─────────────────────────────────────────────────────────────────
+// Balik ke cara foto_lookup(2): pakai langsung URL.createObjectURL(item.file)
+// tanpa decode+resize+re-encode ke canvas. Jauh lebih cepat karena cuma bikin
+// referensi ke file asli, bukan proses gambar. getCachedUrl() (di atas) sudah
+// punya LRU cache sendiri, jadi tinggal dipakai ulang di sini.
+function getThumbUrl(item) {
+    return Promise.resolve(getCachedUrl(item));
+}
+function releaseThumbUrl(path) {
+    releaseCachedUrl(path);
+}
+
+// ── ANTRIAN LOAD THUMBNAIL (batasi decode paralel) ────────────────────────────
+// Tanpa ini, begitu banyak kartu masuk radius observer bareng-bareng (mis. filter
+// per folder), semuanya langsung decode di saat yang sama → macet. Sekarang
+// cuma MAX_CONCURRENT_LOADS gambar yang diproses bersamaan, sisanya antre.
+var _loadQueue = [];
+var _activeLoads = 0;
+var MAX_CONCURRENT_LOADS = 6;
+
+function queueThumbLoad(img, item) {
+    img._pendingLoad = true;
+    _loadQueue.push({ img: img, item: item });
+    pumpLoadQueue();
+}
+function dequeueThumbLoad(img) {
+    img._pendingLoad = false;
+    for (var i = _loadQueue.length - 1; i >= 0; i--) {
+        if (_loadQueue[i].img === img) _loadQueue.splice(i, 1);
+    }
+}
+function pumpLoadQueue() {
+    while (_activeLoads < MAX_CONCURRENT_LOADS && _loadQueue.length > 0) {
+        (function() {
+            var task = _loadQueue.shift();
+            var img = task.img, item = task.item;
+            if (!img._pendingLoad || !img.isConnected) return; // sudah dibatalkan/dibuang
+            _activeLoads++;
+            var sk = img.previousElementSibling;
+            getThumbUrl(item).then(function(url) {
+                _activeLoads--; img._pendingLoad = false;
+                if (img.isConnected) {
+                    img.onload = function() { if (sk && sk.className === 'skeleton') sk.remove(); img.style.display = 'block'; };
+                    img.onerror = function() { if (sk) { sk.style.background = 'rgba(239,68,68,0.1)'; sk.textContent = 'Gagal'; } };
+                    img.src = url;
+                }
+                pumpLoadQueue();
+            }).catch(function() {
+                _activeLoads--; img._pendingLoad = false;
+                if (sk) { sk.style.background = 'rgba(239,68,68,0.1)'; sk.textContent = 'Gagal'; }
+                pumpLoadQueue();
+            });
+        })();
+    }
+}
+
+// ── LAZY THUMBNAIL OBSERVER ───────────────────────────────────────────────────
+// Gambar cuma di-antre-load saat kartunya kelihatan di layar, dan di-lepas lagi
+// saat scroll menjauh — supaya hasil ribuan foto tidak OOM.
+var _thumbObserver = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+        var img = entry.target;
+        var path = img.dataset.path;
+        var item = _thumbRegistry[path] || _excelThumbRegistry[path];
+        if (!item) return;
+        if (entry.isIntersecting) {
+            if (img.src || img._pendingLoad) return; // sudah ke-load / sudah antre
+            queueThumbLoad(img, item);
+        } else {
+            // Keluar layar: batalkan antrian (kalau masih nunggu) + lepas src.
+            // PENTING: jangan set display:none di sini — elemen display:none
+            // tidak punya kotak layout, jadi IntersectionObserver tidak akan
+            // pernah bisa mendeteksinya "masuk viewport" lagi kalau di-scroll
+            // balik, dan fotonya jadi macet tidak pernah kelihatan lagi.
+            dequeueThumbLoad(img);
+            if (img.src) {
+                img.removeAttribute('src');
+                if (!img.previousElementSibling || img.previousElementSibling.className !== 'skeleton') {
+                    var newSk = document.createElement('div');
+                    newSk.className = 'skeleton';
+                    img.parentNode.insertBefore(newSk, img);
+                }
+            }
+        }
+    });
+}, { root: null, rootMargin: '400px 0px', threshold: 0.01 });
+var _thumbRegistry = {};       // path → item, dipakai grid pencarian utama
+var _excelThumbRegistry = {};  // path → item, dipakai grid/tabel excel
+
+// Lepas observer dari gambar lama sebelum container dikosongkan/di-render ulang.
+// Tanpa ini, IntersectionObserver terus "mengintai" elemen yatim (sudah dibuang
+// dari DOM tapi tidak pernah di-unobserve) → makin lama makin berat & lambat.
+function unobserveContainer(containerId) {
+    var el = document.getElementById(containerId);
+    if (!el) return;
+    var imgs = el.querySelectorAll('img[data-path]');
+    for (var i = 0; i < imgs.length; i++) {
+        _thumbObserver.unobserve(imgs[i]);
+        dequeueThumbLoad(imgs[i]);
+    }
+    // Juga lepas proximity observer dari semua card di container ini
+    var cards = el.querySelectorAll('.foto-card[data-prx]');
+    for (var j = 0; j < cards.length; j++) {
+        _proximityObserver.unobserve(cards[j]);
+        cards[j].removeAttribute('data-gpu');
+        cards[j].removeAttribute('data-prx');
+    }
+}
+
+// ── PROXIMITY OBSERVER — GPU layer management ─────────────────────────────────
+// Promote kartu ke GPU compositor layer (~1.5 layar sebelum masuk viewport) agar
+// browser tidak perlu rasterize saat scroll. Demote saat sudah jauh — bebaskan VRAM.
+// Berbeda dari _thumbObserver: ini observe .foto-card (bukan img), dan hanya
+// mengatur will-change lewat attribute, tidak menyentuh src sama sekali.
+var _proximityObserver = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+        var card = entry.target;
+        if (entry.isIntersecting) {
+            card.setAttribute('data-gpu', '1'); // CSS: will-change: transform aktif
+        } else {
+            card.removeAttribute('data-gpu');   // lepas GPU layer, hemat VRAM
+        }
+    });
+}, { root: null, rootMargin: '150% 0px', threshold: 0 });
+
+// ── RENDER BERTAHAP (CHUNKED) ─────────────────────────────────────────────────
+// Alih-alih membangun satu halaman (mis. 60 kartu) sekaligus dalam satu loop
+// synchronous (bikin main thread macet ~1 long task), kartu dibangun per-chunk
+// kecil (default 15) dan di-append lewat requestAnimationFrame. Antar chunk,
+// browser sempat "bernafas" — scroll/klik/animasi lain tidak nge-freeze.
+// startIdx/endIdx: rentang index yang mau dibangun.
+// buildFn(idx): balikin 1 elemen DOM (atau null utk skip) buat index tsb.
+// onChunk(): dipanggil tiap habis 1 chunk di-append (mis. buat load thumbnail
+// yang baru masuk, supaya foto tetap muncul progresif bukan nunggu semua chunk).
+// onDone(): dipanggil sekali di akhir, setelah endIdx tercapai.
+function appendInChunks(startIdx, endIdx, buildFn, container, onDone, onChunk, chunkSize) {
+    chunkSize = chunkSize || 15;
+    var i = startIdx;
+    function step() {
+        var frag = document.createDocumentFragment();
+        var stepEnd = Math.min(i + chunkSize, endIdx);
+        for (; i < stepEnd; i++) {
+            var el = buildFn(i);
+            if (el) frag.appendChild(el);
+        }
+        container.appendChild(frag);
+        if (onChunk) onChunk();
+        if (i < endIdx) {
+            requestAnimationFrame(step);
+        } else if (onDone) {
+            onDone();
+        }
+    }
+    step();
+}
+
+// ── RENDER HASIL (grid banyak foto, lazy + paginated, ala index.html) ────────
+var PAGE_SIZE = 60;
+var _currentResults = [];
+var _currentQuery = '';
+var _renderedCount = 0;
+
+function renderSearchResults(query, items) {
+    var area = document.getElementById('hasil-area');
+    unobserveContainer('hasil-area');
+    _currentResults = items;
+    _currentQuery = query;
+    _renderedCount = 0;
+    _thumbRegistry = {};
+
+    if (items.length === 0) {
+        area.innerHTML =
+            '<div class="not-found">' +
+            '<div class="nf-icon">🔍</div>' +
+            '<div class="nf-kode">' + escHtml(query || '(filter kosong)') + '</div>' +
+            '<div class="nf-sub">Tidak ditemukan di folder yang dipilih.<br>' +
+            'Coba ubah kata kunci, mode pencarian, atau filter folder.</div>' +
+            '</div>';
+        return;
+    }
+
+    var headerHtml =
+        '<div class="hasil-header">' +
+        '<span class="hasil-kode">' + (query ? escHtml(query) : 'Semua Foto') + '</span>' +
+        '<span class="hasil-count">' + items.length + ' foto ditemukan' +
+        (items.length > PAGE_SIZE ? ' — ditampilkan bertahap supaya ringan' : '') + '</span>' +
+        '</div>';
+
+    area.innerHTML = headerHtml + '<div class="foto-grid" id="foto-grid"></div><div id="load-more-wrap" style="text-align:center;margin-top:16px"></div>';
+
+    renderNextPage();
+}
+
+function renderNextPage() {
+    var grid = document.getElementById('foto-grid');
+    if (!grid) return;
+    var end = Math.min(_renderedCount + PAGE_SIZE, _currentResults.length);
+    var startIdx = _renderedCount;
+
+    appendInChunks(startIdx, end, buildFotoCard, grid, function() {
+        _renderedCount = end;
+        updateLoadMoreWrap();
+    }, null, 15);
+}
+
+// Bangun 1 kartu foto untuk index tertentu di _currentResults. Dipanggil oleh
+// appendInChunks (renderNextPage) sebanyak PAGE_SIZE per klik "Muat lagi",
+// tapi dicicil 15 per chunk supaya tidak nge-freeze.
+function buildFotoCard(idx) {
+        var item = _currentResults[idx];
+        _thumbRegistry[item.path] = item;
+
+        var card = document.createElement('div');
+        var hasDup = item.dupVariants && item.dupVariants.length > 1;
+        card.className = 'foto-card' + (hasDup ? ' has-dup' : '');
+        card.onclick = (function(i) { return function() { openLightbox(i); }; })(idx);
+
+        var kodeBadgeHtml = hasDup
+            ? '<span class="foto-badge-kode has-dup" data-dup-idx="' + idx + '">' + escHtml(item.base) +
+              '<span class="foto-badge-dup-count">×' + item.dupVariants.length + '</span></span>'
+            : '<span class="foto-badge-kode">' + escHtml(item.base) + '</span>';
+
+        card.innerHTML =
+            '<div class="foto-img-wrap">' +
+            '<div class="skeleton"></div>' +
+            '<img style="display:none" alt="' + escHtml(item.path) + '">' +
+            kodeBadgeHtml +
+            '</div>' +
+            '<div class="foto-info">' +
+            (item.folder ? '<span class="foto-folder">' + escHtml(item.folder) + '</span>' : '') +
+            '<span class="foto-path">' + escHtml(item.base) + '</span>' +
+            '</div>';
+
+        if (hasDup) {
+            var kodeEl = card.querySelector('.foto-badge-kode');
+            kodeEl.addEventListener('click', (function(variants) {
+                return function(ev) {
+                    ev.stopPropagation();
+                    openDupLightbox(variants);
+                };
+            })(item.dupVariants));
+        }
+
+        // Pasang src via img.decode() agar decode terjadi di background thread,
+        // tidak blok main thread saat scroll. decoding="async" juga ditambahkan
+        // agar browser tahu gambar boleh di-decode secara asynchronous.
+        (function(img, it) {
+            var sk = img.previousElementSibling;
+            img.setAttribute('decoding', 'async');
+            img.onload = function() {
+                // Decode sudah selesai di background, tampilkan tanpa jank
+                if (img.decode) {
+                    img.decode().then(function() {
+                        if (sk && sk.className === 'skeleton') sk.remove();
+                        img.style.display = 'block';
+                    }).catch(function() {
+                        if (sk && sk.className === 'skeleton') sk.remove();
+                        img.style.display = 'block';
+                    });
+                } else {
+                    if (sk && sk.className === 'skeleton') sk.remove();
+                    img.style.display = 'block';
+                }
+            };
+            img.onerror = function() {
+                if (sk) { sk.style.background = 'rgba(239,68,68,0.1)'; sk.textContent = 'Gagal'; }
+            };
+            img.src = getCachedUrl(it);
+        })(card.querySelector('img'), item);
+
+        // Daftarkan card ke proximity observer agar GPU layer di-manage otomatis
+        card.setAttribute('data-prx', '1');
+        _proximityObserver.observe(card);
+        return card;
+}
+
+function updateLoadMoreWrap() {
+    var moreWrap = document.getElementById('load-more-wrap');
+    if (moreWrap) {
+        if (_renderedCount < _currentResults.length) {
+            moreWrap.innerHTML = '<button class="btn-excel-go" onclick="renderNextPage()">▼ Muat ' +
+                Math.min(PAGE_SIZE, _currentResults.length - _renderedCount) + ' foto lagi (' +
+                _renderedCount + ' / ' + _currentResults.length + ')</button>';
+        } else {
+            moreWrap.innerHTML = '';
+        }
+    }
+}
+
+// ── LIGHTBOX ──────────────────────────────────────────────────────────────────
+// Dua mode: 'lazy' (hasil pencarian utama, bisa ribuan → ambil on-demand dari
+// _currentResults + LRU cache) dan 'array' (hasil per-baris excel, sedikit → _lbUrls biasa).
+var _lbMode = 'lazy';
+var _lbExcelRows = []; // index baris _excelDataRows yang terkait foto yg lagi dibuka di lightbox (kalau ada)
+// ── ZOOM & PAN FOTO DI LIGHTBOX (scroll wheel = zoom, drag = geser) ──────────
+var _lbZoom = 1, _lbPanX = 0, _lbPanY = 0;
+var _lbDragging = false, _lbDragStartX = 0, _lbDragStartY = 0, _lbPanStartX = 0, _lbPanStartY = 0;
+
+function applyLbTransform() {
+    var img = document.getElementById('lb-img');
+    if (!img) return;
+    img.style.transform = 'translate(' + _lbPanX + 'px, ' + _lbPanY + 'px) scale(' + _lbZoom + ')';
+    img.classList.toggle('lb-zoomed', _lbZoom > 1);
+}
+function resetLbZoom() {
+    _lbZoom = 1; _lbPanX = 0; _lbPanY = 0;
+    applyLbTransform();
+}
+function initLbZoomPan() {
+    var img = document.getElementById('lb-img');
+    if (!img || img._lbZoomInit) return;
+    img._lbZoomInit = true;
+
+    img.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        var rect = img.getBoundingClientRect();
+        var prevZoom = _lbZoom;
+        var delta = e.deltaY < 0 ? 0.25 : -0.25;
+        _lbZoom = Math.min(6, Math.max(1, +(_lbZoom + delta).toFixed(2)));
+        if (_lbZoom === prevZoom) return;
+        if (_lbZoom === 1) {
+            _lbPanX = 0; _lbPanY = 0;
+        } else {
+            // zoom terpusat ke posisi kursor, bukan ke tengah gambar
+            var offsetX = e.clientX - (rect.left + rect.width / 2);
+            var offsetY = e.clientY - (rect.top + rect.height / 2);
+            var scaleChange = _lbZoom / prevZoom;
+            _lbPanX = (_lbPanX - offsetX) * scaleChange + offsetX;
+            _lbPanY = (_lbPanY - offsetY) * scaleChange + offsetY;
+        }
+        applyLbTransform();
+    }, { passive: false });
+
+    img.addEventListener('mousedown', function(e) {
+        if (_lbZoom <= 1) return;
+        e.preventDefault();
+        _lbDragging = true;
+        _lbDragStartX = e.clientX; _lbDragStartY = e.clientY;
+        _lbPanStartX = _lbPanX; _lbPanStartY = _lbPanY;
+    });
+    window.addEventListener('mousemove', function(e) {
+        if (!_lbDragging) return;
+        _lbPanX = _lbPanStartX + (e.clientX - _lbDragStartX);
+        _lbPanY = _lbPanStartY + (e.clientY - _lbDragStartY);
+        applyLbTransform();
+    });
+    window.addEventListener('mouseup', function() { _lbDragging = false; });
+
+    img.addEventListener('dblclick', function(e) { e.preventDefault(); resetLbZoom(); });
+}
+
+function openLightbox(idx) {
+    _lbMode = 'lazy';
+    _lbExcelRows = [];
+    _lbIdx = idx;
+    updateLightbox();
+    document.getElementById('lightbox').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+// Cari index kolom Excel berdasarkan nama header persis (exactNames) dulu,
+// baru fallback ke pencocokan "mengandung kata" (containsWords) kalau tidak ketemu.
+function findExcelColIdx(exactNames, containsWords) {
+    for (var i = 0; i < _excelHeaders.length; i++) {
+        var h = String(_excelHeaders[i] || '').trim().toLowerCase();
+        if (exactNames.indexOf(h) !== -1) return i;
+    }
+    if (containsWords) {
+        for (var j = 0; j < _excelHeaders.length; j++) {
+            var h2 = String(_excelHeaders[j] || '').trim().toLowerCase();
+            for (var k = 0; k < containsWords.length; k++) {
+                if (h2.indexOf(containsWords[k]) !== -1) return j;
+            }
+        }
+    }
+    return -1;
+}
+// Tampilkan data Excel (Packing List + Tahun, SPN, Name, Item Name, Category, Rmb)
+// terkait foto yang sedang dibuka di lightbox. Dipanggil tiap kali foto/lightbox berganti.
+function renderLbExcelPanel() {
+    var panel = document.getElementById('lb-excel-panel');
+    if (!panel) return;
+    if (!_lbExcelRows.length || !_excelDataRows.length || !_excelHeaders.length) {
+        panel.style.display = 'none';
+        panel.innerHTML = '';
+        return;
+    }
+    var idxPL       = findExcelColIdx(['packing list'], ['packing']);
+    var idxTahun    = findExcelColIdx(['tahun'], ['tahun', 'year']);
+    var idxSPN      = findExcelColIdx(['supplier part number'], ['supplier part number', 'spn']);
+    var idxItemName = findExcelColIdx(['item name'], ['item name']);
+    var idxName     = findExcelColIdx(['name'], null);
+    var idxCategory = findExcelColIdx(['category'], ['category']);
+    var idxRmb      = findExcelColIdx(['rmb'], ['rmb']);
+
+    function val(row, ci) { return (ci !== -1 && row[ci] !== undefined) ? String(row[ci]).trim() : ''; }
+
+    var rowsHtml = _lbExcelRows.map(function(rIdx) {
+        var row = _excelDataRows[rIdx];
+        if (!row) return '';
+        var plTahun = [val(row, idxPL), val(row, idxTahun)].filter(Boolean).join(' ');
+        var fields = [
+            ['Packing List + Tahun', plTahun, true],
+            ['Supplier Part Number', val(row, idxSPN), false],
+            ['Kode', val(row, idxName), false],
+            ['Descripsi', val(row, idxItemName), false],
+            ['Category', val(row, idxCategory), false],
+            ['Rmb', val(row, idxRmb), false]
+        ];
+        return '<div class="lb-excel-row">' + fields.map(function(f) {
+            if (!f[1]) return '';
+            return '<div class="lb-excel-field' + (f[2] ? ' lb-excel-highlight' : '') + '">' +
+                '<span class="lb-excel-label">' + escHtml(f[0]) + '</span>' +
+                '<span class="lb-excel-value">' + escHtml(f[1]) + '</span></div>';
+        }).join('') + '</div>';
+    }).join('<div class="lb-excel-divider"></div>');
+
+    if (!rowsHtml.trim()) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
+
+    panel.innerHTML =
+        (_lbExcelRows.length > 1 ? '<div class="lb-excel-title">' + _lbExcelRows.length + ' data Excel terkait</div>' : '') +
+        rowsHtml;
+    panel.style.display = 'block';
+}
+function updateLightbox() {
+    initLbZoomPan();
+    resetLbZoom();
+    if (_lbMode === 'array') {
+        var item = _lbUrls[_lbIdx];
+        if (!item) return;
+        document.getElementById('lb-img').src = item.url;
+        document.getElementById('lb-path').textContent = item.path;
+        document.getElementById('lb-counter').textContent = (_lbIdx + 1) + ' / ' + _lbUrls.length;
+        renderLbExcelPanel();
+        return;
+    }
+    var it = _currentResults[_lbIdx];
+    if (!it) return;
+    document.getElementById('lb-img').src = getCachedUrl(it);
+    document.getElementById('lb-path').textContent = it.path;
+    document.getElementById('lb-counter').textContent = (_lbIdx + 1) + ' / ' + _currentResults.length;
+    renderLbExcelPanel();
+}
+function lbNav(dir) {
+    var len = (_lbMode === 'array') ? _lbUrls.length : _currentResults.length;
+    _lbIdx = (_lbIdx + dir + len) % len;
+    updateLightbox();
+}
+function closeLightbox(e) {
+    if (e && e.target !== document.getElementById('lightbox') && !e.target.classList.contains('lightbox-close')) return;
+    document.getElementById('lightbox').classList.remove('active');
+    document.body.style.overflow = '';
+    resetLbZoom();
+}
+document.addEventListener('keydown', function(e) {
+    var lb = document.getElementById('lightbox');
+    if (!lb.classList.contains('active')) return;
+    if (e.key === 'Escape')       closeLightbox({target: lb});
+    if (e.key === 'ArrowRight')   lbNav(1);
+    if (e.key === 'ArrowLeft')    lbNav(-1);
+});
+
+// ── EXCEL: BACA FILE (mendukung pilih banyak file sekaligus, & bisa ditambah lagi) ──
+// _excelFiles: daftar file yg sudah dimuat, per-file, supaya bisa dihapus satu-satu.
+// { id, name, rowCount, rows: [][] }  — rows sudah dinormalisasi ke urutan kolom acuan.
+var _excelFiles = [];
+var _excelFileIdSeq = 0;
+
+// Kolom acuan gabungan: Packing List, Tahun, Category, SPN, Name, Item Name, Rmb.
+// PENTING: baris header internal harus pakai NAMA HEADER ASLI Excel (bukan label
+// tampilan di filter "Kode"/"Descripsi"), supaya pencocokan kolom (regex) di
+// tempat lain (filter, panel detail lightbox, dst) tetap jalan.
+var CANON_ORIGINAL_HEADER_NAME = {
+    packinglist: 'Packing List',
+    tahun: 'Tahun',
+    category: 'Category',
+    spn: 'Supplier Part Number',
+    name: 'Name',
+    itemname: 'Item Name',
+    rmb: 'Rmb'
+};
+function getCanonCols() {
+    return EF_COLUMNS.map(function(c) { return { key: c.key, label: c.label, match: c.match }; });
+}
+function getCanonHeaderRow() {
+    return getCanonCols().map(function(c) { return CANON_ORIGINAL_HEADER_NAME[c.key] || c.label; });
+}
+
+function handleExcelInput(files) {
+    if (!files || files.length === 0) return;
+    var fileList = Array.prototype.slice.call(files);
+
+    if (typeof XLSX === 'undefined') {
+        showToast('Library Excel gagal dimuat. Pastikan koneksi internet aktif (untuk load library sekali saja).', 'red');
+        return;
+    }
+
+    var pw = document.getElementById('excel-progress-wrap');
+    var pb = document.getElementById('excel-progress-bar');
+    pw.style.display = 'block';
+    pb.style.width = '0%';
+
+    document.getElementById('excel-icon').textContent = '⏳';
+    document.getElementById('excel-title').textContent = 'Membaca file excel… (0/' + fileList.length + ' selesai)';
+    document.getElementById('excel-sub').textContent = fileList.map(function(f) { return f.name; }).join(', ');
+
+    var parsed = [];   // { name, headerRow, dataRows }
+    var errors = [];
+    var pending = fileList.length;
+    var done = 0;
+    var total = fileList.length;
+
+    function onOneDone(fileName, ok) {
+        done++;
+        var pct = Math.round(done / total * 100);
+        pb.style.width = pct + '%';
+        document.getElementById('excel-title').textContent =
+            'Membaca file excel… (' + done + '/' + total + ' selesai)';
+        document.getElementById('excel-sub').textContent =
+            (ok ? '✓ ' : '✗ ') + fileName;
+        if (pending === 0) {
+            pw.style.display = 'none';
+            finishExcelMultiLoad(parsed, errors);
+        }
+    }
+
+    fileList.forEach(function(file) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                var data = new Uint8Array(e.target.result);
+                var wb = XLSX.read(data, { type: 'array', cellDates: true });
+                var sheetName = wb.SheetNames[0];
+                var ws = wb.Sheets[sheetName];
+                var allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+                var headerRow = allRows[0] || [];
+                var dataRows = allRows.slice(1).filter(function(row) {
+                    return row.some(function(cell) { return String(cell || '').trim() !== ''; });
+                });
+                parsed.push({ name: file.name, headerRow: headerRow, dataRows: dataRows });
+                pending--;
+                onOneDone(file.name, true);
+            } catch (err) {
+                console.error('[FotoLookup] Error baca excel:', file.name, err);
+                errors.push(file.name + ': ' + err.message);
+                pending--;
+                onOneDone(file.name, false);
+            }
+        };
+        reader.onerror = function() {
+            errors.push(file.name + ': gagal dibaca');
+            pending--;
+            onOneDone(file.name, false);
+        };
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+// Gabungkan hasil parse beberapa file jadi satu tabel, dicocokkan PER NAMA KOLOM
+// (bukan posisi), supaya aman walau urutan kolom antar file berbeda-beda.
+// Tiap file disimpan terpisah di _excelFiles supaya bisa dihapus satu-satu nanti.
+function finishExcelMultiLoad(parsed, errors) {
+    if (!parsed.length) {
+        if (!_excelFiles.length) {
+            document.getElementById('excel-icon').textContent = '📊';
+            document.getElementById('excel-title').textContent = 'Pilih File Excel (kode barang)';
+            document.getElementById('excel-sub').textContent = 'Klik di sini → bisa pilih beberapa file .xlsx/.xls/.csv sekaligus, atau tambah lagi kapan saja';
+        }
+        showToast('Gagal membaca semua file excel yang dipilih.', 'red');
+        return;
+    }
+
+    var canonCols = getCanonCols();
+    var wasEmpty = _excelFiles.length === 0;
+    var newRowCount = 0;
+
+    parsed.forEach(function(f) {
+        // Cari index kolom di file INI utk tiap kolom acuan, berdasarkan nama header
+        var colIdxInFile = canonCols.map(function(c) {
+            for (var i = 0; i < f.headerRow.length; i++) {
+                var h = String(f.headerRow[i] || '').trim();
+                if (c.match.test(h)) return i;
+            }
+            return -1;
+        });
+        var rows = f.dataRows.map(function(row) {
+            return colIdxInFile.map(function(idx) {
+                return (idx !== -1 && row[idx] !== undefined) ? row[idx] : '';
+            });
+        });
+        newRowCount += rows.length;
+        _excelFiles.push({ id: ++_excelFileIdSeq, name: f.name, rowCount: rows.length, rows: rows });
+    });
+
+    rebuildExcelAllRowsFromFiles();
+
+    var zone = document.getElementById('excel-zone');
+    zone.classList.add('loaded');
+    document.getElementById('excel-icon').textContent = '✅';
+    document.getElementById('excel-title').textContent =
+        _excelFiles.length + ' file excel dimuat (' + (_excelAllRows.length - 1).toLocaleString('id-ID') + ' baris)';
+    document.getElementById('excel-sub').textContent = 'Klik lagi utk tambah file lain';
+    renderExcelFileList();
+
+    var msg = (wasEmpty ? '✅ Dimuat ' : '➕ Ditambahkan ') + parsed.length + ' file excel (' +
+        newRowCount.toLocaleString('id-ID') + ' baris baru, total ' +
+        (_excelAllRows.length - 1).toLocaleString('id-ID') + ' baris)';
+    showToast(msg, 'green');
+    if (errors.length) {
+        showToast('⚠️ ' + errors.length + ' file gagal dibaca: ' + errors.join('; '), 'amber');
+    }
+
+    setupExcelFilterColumns();
+    maybeAutoRunExcel();
+}
+
+// Bangun ulang _excelAllRows dari _excelFiles (dipakai saat load awal & saat hapus file)
+function rebuildExcelAllRowsFromFiles() {
+    var canonHeaderRow = getCanonHeaderRow();
+    var canonCols = getCanonCols();
+    var mergedRows = [];
+    _excelFiles.forEach(function(f) { mergedRows = mergedRows.concat(f.rows); });
+    _excelHeaders = canonHeaderRow;
+    _excelHeaderRowIdx = 0;
+    _excelAllRows = [canonHeaderRow].concat(mergedRows);
+    _excelKodeColIdx = canonCols.findIndex(function(c) { return c.key === 'name'; });
+    if (_excelKodeColIdx === -1) _excelKodeColIdx = 0;
+}
+
+// Render daftar chip file excel yang sudah dimuat, masing-masing punya tombol ✕ hapus.
+function renderExcelFileList() {
+    var wrap = document.getElementById('excel-file-list');
+    if (!wrap) return;
+    wrap.innerHTML = _excelFiles.map(function(f) {
+        return '<span class="excel-file-chip">' +
+            '<span class="efc-name" title="' + escHtml(f.name) + '">' + escHtml(f.name) + '</span>' +
+            '<span class="efc-rows">' + f.rowCount.toLocaleString('id-ID') + ' baris</span>' +
+            '<button type="button" title="Hapus file ini" onclick="removeExcelFile(' + f.id + ')">✕</button>' +
+        '</span>';
+    }).join('');
+}
+
+// Hapus 1 file excel dari data gabungan tanpa perlu refresh halaman.
+function removeExcelFile(fileId) {
+    var idx = _excelFiles.findIndex(function(f) { return f.id === fileId; });
+    if (idx === -1) return;
+    var removed = _excelFiles.splice(idx, 1)[0];
+
+    if (_excelFiles.length === 0) {
+        // Semua file dihapus → reset total ke kondisi awal
+        _excelAllRows = [];
+        _excelHeaders = [];
+        _excelHeaderRowIdx = 0;
+        _excelKodeColIdx = 0;
+        _excelDataRowsFull = [];
+        _excelRowPhotosFull = [];
+        _excelDataRows = [];
+        _excelRowPhotos = [];
+        _excelFoundCount = 0;
+
+        var zone = document.getElementById('excel-zone');
+        zone.classList.remove('loaded');
+        document.getElementById('excel-icon').textContent = '📊';
+        document.getElementById('excel-title').textContent = 'Pilih File Excel (kode barang)';
+        document.getElementById('excel-sub').textContent = 'Klik di sini → bisa pilih beberapa file .xlsx/.xls/.csv sekaligus, atau tambah lagi kapan saja';
+        document.getElementById('excel-input').value = '';
+        renderExcelFileList();
+        document.getElementById('excel-filter-bar').style.display = 'none';
+        document.getElementById('excel-hasil-area').innerHTML = '';
+        showToast('🗑️ "' + removed.name + '" dihapus. Semua data excel sudah kosong.', 'amber');
+        return;
+    }
+
+    rebuildExcelAllRowsFromFiles();
+    document.getElementById('excel-title').textContent =
+        _excelFiles.length + ' file excel dimuat (' + (_excelAllRows.length - 1).toLocaleString('id-ID') + ' baris)';
+    renderExcelFileList();
+    setupExcelFilterColumns();
+    showToast('🗑️ "' + removed.name + '" dihapus. Sisa ' + _excelFiles.length + ' file (' +
+        (_excelAllRows.length - 1).toLocaleString('id-ID') + ' baris).', 'amber');
+
+    if (_ready) {
+        tampilkanTabelExcel();
+    }
+}
+
+// Otomatis tampilkan data + foto begitu folder DAN excel sama-sama sudah siap,
+// tanpa perlu klik tombol apa pun. Juga dipanggil ulang tiap kali ada file excel
+// baru ditambahkan, supaya tabel & foto ikut ter-refresh dengan data gabungan.
+var _excelAutoRunning = false;
+function maybeAutoRunExcel() {
+    if (_excelAutoRunning) return;
+    if (_ready && _excelAllRows && _excelAllRows.length) {
+        _excelAutoRunning = true;
+        try {
+            tampilkanTabelExcel();
+        } finally {
+            _excelAutoRunning = false;
+        }
+    }
+}
+
+// ── EXCEL: RENDER TABEL + FOTO ──────────────────────────────────────────────
+var _excelRowPhotos = [];   // array of hits per baris (sudah difilter kolom)
+var _excelDataRows  = [];   // baris data yang lagi ditampilkan (sudah difilter kolom)
+var _excelDataRowsFull  = []; // semua baris hasil cocok kode, sebelum filter kolom
+var _excelRowPhotosFull = [];
+var _excelFoundCount = 0;
+var _excelViewMode = 'gallery'; // 'gallery' | 'table'
+
+// ── FILTER KOLOM EXCEL (Packing List, Tahun, SPN, Name, Item Name, Category, Rmb) ──
+var _efColIdx = {};
+var EF_COLUMNS = [
+    { key: 'packinglist', label: 'Packing List',          match: /^packing\s*list$/i,          type: 'text',   elId: 'ef-packinglist', wrapId: 'ef-wrap-packinglist' },
+    { key: 'tahun',       label: 'Tahun',                 match: /^tahun$/i,                    type: 'select', elId: 'ef-tahun',       wrapId: 'ef-wrap-tahun' },
+    { key: 'category',    label: 'Category',              match: /^category$/i,                 type: 'text',   elId: 'ef-category',    wrapId: 'ef-wrap-category' },
+    { key: 'spn',         label: 'Supplier Part Number',  match: /^supplier\s*part\s*number$/i, type: 'text',   elId: 'ef-spn',         wrapId: 'ef-wrap-spn' },
+    { key: 'name',        label: 'Kode',                  match: /^name$/i,                     type: 'text',   elId: 'ef-name',        wrapId: 'ef-wrap-name' },
+    { key: 'itemname',    label: 'Descripsi',             match: /^item\s*name$/i,              type: 'text',   elId: 'ef-itemname',    wrapId: 'ef-wrap-itemname' },
+    { key: 'rmb',         label: 'Rmb',                   match: /^rmb$/i,                       type: 'text',   elId: 'ef-rmb',         wrapId: 'ef-wrap-rmb' }
+];
+
+function setupExcelFilterColumns() {
+    _efColIdx = {};
+    EF_COLUMNS.forEach(function(col) {
+        var idx = -1;
+        _excelHeaders.forEach(function(h, i) { if (col.match.test(String(h || '').trim())) idx = i; });
+        _efColIdx[col.key] = idx;
+    });
+}
+
+function populateExcelFilterOptions(uniqueSets) {
+    uniqueSets = uniqueSets || {};
+    var bar = document.getElementById('excel-filter-bar');
+    var anyAvailable = false;
+    EF_COLUMNS.forEach(function(col) {
+        var idx = _efColIdx[col.key];
+        var wrap = document.getElementById(col.wrapId);
+        if (idx === -1) {
+            if (wrap) wrap.style.display = 'none';
+            return;
+        }
+        if (wrap) wrap.style.display = '';
+        anyAvailable = true;
+        
+        var values = uniqueSets[col.key] || {};
+        var sorted = Object.keys(values).sort(function(a, b) {
+            var na = parseFloat(a), nb = parseFloat(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return a.localeCompare(b);
+        });
+
+        if (col.type === 'select') {
+            var sel = document.getElementById(col.elId);
+            var prevVal = sel.value;
+            sel.innerHTML = '<option value="">Semua ' + escHtml(col.label) + '</option>' +
+                sorted.map(function(v) { return '<option value="' + escHtml(v) + '">' + escHtml(v) + '</option>'; }).join('');
+            sel.value = sorted.indexOf(prevVal) !== -1 ? prevVal : '';
+        } else if (col.key === 'category' || col.key === 'spn' || col.key === 'name' || col.key === 'packinglist') {
+            var inputEl = document.getElementById(col.elId);
+            if (inputEl) {
+                var listId = col.elId + '-datalist';
+                var datalistEl = document.getElementById(listId);
+                if (!datalistEl) {
+                    datalistEl = document.createElement('datalist');
+                    datalistEl.id = listId;
+                    // Taruh datalist di sebelah input agar rapi di DOM
+                    inputEl.parentNode.appendChild(datalistEl);
+                    inputEl.setAttribute('list', listId);
+                }
+                datalistEl.innerHTML = sorted.map(function(v) {
+                    return '<option value="' + escHtml(v) + '">';
+                }).join('');
+            }
+        }
+    });
+    bar.style.display = anyAvailable ? 'flex' : 'none';
+}
+
+var _efDebounce = null;
+function triggerExcelFilter() {
+    clearTimeout(_efDebounce);
+    _efDebounce = setTimeout(applyExcelFilter, 150);
+}
+
+// ── Referensi pencarian tambahan utk Item Name (tag/chip, digabung dgn logika OR) ──
+var _efItemNameTags = [];
+function addEfItemNameTag() {
+    var el = document.getElementById('ef-itemname');
+    if (!el) return;
+    var v = el.value.trim();
+    if (!v) return;
+    var exists = _efItemNameTags.some(function(t) { return t.toLowerCase() === v.toLowerCase(); });
+    if (!exists) _efItemNameTags.push(v);
+    el.value = '';
+    renderEfItemNameTags();
+    applyExcelFilter();
+}
+function removeEfItemNameTag(idx) {
+    _efItemNameTags.splice(idx, 1);
+    renderEfItemNameTags();
+    applyExcelFilter();
+}
+function renderEfItemNameTags() {
+    var wrap = document.getElementById('ef-itemname-tags');
+    if (!wrap) return;
+    wrap.innerHTML = _efItemNameTags.map(function(t, i) {
+        return '<span class="ef-tag">' + escHtml(t) +
+            '<button type="button" title="Hapus" onclick="removeEfItemNameTag(' + i + ')">✕</button></span>';
+    }).join('');
+}
+function efItemNameKeydown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); addEfItemNameTag(); }
+}
+
+// Urutkan pasangan rows+photos berdasarkan kolom Tahun, Z-A (besar ke kecil / descending).
+// Baris tanpa nilai tahun ditaruh paling bawah.
+function sortRowsByTahunDesc(rows, photos) {
+    var idxTahun = _efColIdx['tahun'];
+    if (idxTahun === undefined || idxTahun === -1) return { rows: rows, photos: photos };
+
+    var idxArr = rows.map(function(_, i) { return i; });
+    idxArr.sort(function(ia, ib) {
+        var a = String(rows[ia][idxTahun] !== undefined ? rows[ia][idxTahun] : '').trim();
+        var b = String(rows[ib][idxTahun] !== undefined ? rows[ib][idxTahun] : '').trim();
+        if (!a && !b) return 0;
+        if (!a) return 1;
+        if (!b) return -1;
+        var na = parseFloat(a), nb = parseFloat(b);
+        if (!isNaN(na) && !isNaN(nb)) return nb - na;
+        return b.localeCompare(a);
+    });
+
+    return {
+        rows: idxArr.map(function(i) { return rows[i]; }),
+        photos: idxArr.map(function(i) { return photos[i]; })
+    };
+}
+
+function applyExcelFilter() {
+    if (!_excelDataRowsFull.length) return;
+
+    var vals = {};
+    var anyFilterActive = false;
+    EF_COLUMNS.forEach(function(col) {
+        var el = document.getElementById(col.elId);
+        var raw = el ? el.value : '';
+        var v = (col.type === 'text') ? raw.trim().toLowerCase() : raw;
+        vals[col.key] = v;
+        if (v) anyFilterActive = true;
+    });
+    if (_efItemNameTags.length) anyFilterActive = true;
+
+    // Fast-path: belum ada filter dipilih → tampilkan semua tanpa loop lagi
+    if (!anyFilterActive) {
+        var sortedFast = sortRowsByTahunDesc(_excelDataRowsFull, _excelRowPhotosFull);
+        _excelDataRows = sortedFast.rows;
+        _excelRowPhotos = sortedFast.photos;
+        _excelFoundCount = _excelRowPhotosFull.reduce(function(acc, h) { return acc + (h.length > 0 ? 1 : 0); }, 0);
+        renderExcelHasil();
+        return;
+    }
+
+    var filteredRows = [];
+    var filteredPhotos = [];
+    _excelDataRowsFull.forEach(function(row, i) {
+        var ok = EF_COLUMNS.every(function(col) {
+            var idx = _efColIdx[col.key];
+            if (idx === -1) return true;
+            var cellRaw = String(row[idx] !== undefined ? row[idx] : '').trim();
+
+            // Item Name: gabungkan input aktif + semua referensi (tag) dgn logika AND
+            // (setiap referensi harus ada di teks, tak peduli urutan/posisinya)
+            if (col.key === 'itemname') {
+                var terms = _efItemNameTags.slice();
+                if (vals[col.key]) terms.push(vals[col.key]);
+                if (!terms.length) return true;
+                var cellLower = cellRaw.toLowerCase();
+                return terms.every(function(t) { return cellLower.indexOf(t.toLowerCase()) !== -1; });
+            }
+
+            var filterVal = vals[col.key];
+            if (!filterVal) return true;
+            if (col.type === 'select') return cellRaw === filterVal;
+            return cellRaw.toLowerCase().indexOf(filterVal) !== -1;
+        });
+        if (ok) {
+            filteredRows.push(row);
+            filteredPhotos.push(_excelRowPhotosFull[i]);
+        }
+    });
+
+    var sortedFiltered = sortRowsByTahunDesc(filteredRows, filteredPhotos);
+    _excelDataRows = sortedFiltered.rows;
+    _excelRowPhotos = sortedFiltered.photos;
+    _excelFoundCount = filteredPhotos.reduce(function(acc, h) { return acc + (h.length > 0 ? 1 : 0); }, 0);
+
+    renderExcelHasil();
+}
+
+function resetExcelFilter() {
+    EF_COLUMNS.forEach(function(col) {
+        var el = document.getElementById(col.elId);
+        if (el) el.value = '';
+    });
+    _efItemNameTags = [];
+    renderEfItemNameTags();
+    applyExcelFilter();
+}
+
+function tampilkanTabelExcel() {
+    if (!_excelAllRows.length) {
+        showToast('Pilih file excel dulu.', 'amber');
+        return;
+    }
+    if (!_ready) {
+        showToast('Pilih folder foto dulu supaya bisa dicocokkan.', 'amber');
+        return;
+    }
+
+    var dataRows = _excelAllRows.slice(_excelHeaderRowIdx + 1).filter(function(row) {
+        return row.some(function(cell) { return String(cell || '').trim() !== ''; });
+    });
+
+    if (dataRows.length === 0) {
+        showToast('Tidak ada baris data di bawah header yang dipilih.', 'amber');
+        return;
+    }
+
+    setupExcelFilterColumns();
+    _efItemNameTags = [];
+    renderEfItemNameTags();
+
+    // Siapkan wadah nilai unik utk kolom dropdown & datalist suggestion,
+    // dikumpulkan sekalian dalam loop yang sama dengan pencocokan foto.
+    var efUniqueSets = {};
+    EF_COLUMNS.forEach(function(col) {
+        if (_efColIdx[col.key] !== -1 && (col.type === 'select' || col.key === 'category' || col.key === 'spn' || col.key === 'name' || col.key === 'packinglist')) {
+            efUniqueSets[col.key] = {};
+        }
+    });
+
+    var foundCount = 0;
+    var rowPhotoStore = [];
+    dataRows.forEach(function(row) {
+        var kodeRaw = String(row[_excelKodeColIdx] || '').trim();
+        var hits = kodeRaw ? expandDupVariants(lookupKode(kodeRaw)) : [];
+        rowPhotoStore.push(hits);
+        if (hits.length > 0) foundCount++;
+
+        for (var k in efUniqueSets) {
+            var idx = _efColIdx[k];
+            var v = String(row[idx] !== undefined ? row[idx] : '').trim();
+            if (v) efUniqueSets[k][v] = true;
+        }
+    });
+
+    _excelDataRowsFull = dataRows;
+    _excelRowPhotosFull = rowPhotoStore;
+
+    populateExcelFilterOptions(efUniqueSets);
+    applyExcelFilter();
+
+    showToast('✅ ' + foundCount + ' / ' + dataRows.length + ' kode cocok dengan foto', foundCount > 0 ? 'green' : 'amber');
+}
+
+function setExcelViewMode(mode) {
+    _excelViewMode = mode;
+    renderExcelHasil();
+}
+
+var EXCEL_PAGE_SIZE = 60;
+var _excelRenderedCount = 0;
+var _excelGalleryGroups = []; // gallery view: baris2 dgn kode sama ditumpuk jadi 1 kartu
+
+// Kelompokkan _excelDataRows berdasarkan nilai kolom kode. Baris dengan kode
+// sama (mis. beberapa SPN untuk 1 kode barang yang sama) digabung jadi 1 grup
+// supaya di Gallery cuma tampil 1 kartu bertumpuk, bukan berulang-ulang.
+// Baris dengan kode kosong TIDAK digabung satu sama lain (masing-masing tetap
+// kartu sendiri), karena kode kosong bukan identitas yang valid untuk ditumpuk.
+function buildExcelGalleryGroups() {
+    var groups = {};
+    var order = [];
+    for (var i = 0; i < _excelDataRows.length; i++) {
+        var row = _excelDataRows[i];
+        var kodeRaw = String(row[_excelKodeColIdx] || '').trim();
+        var key = kodeRaw ? kodeRaw.toUpperCase() : '__empty_' + i;
+        if (!groups[key]) { groups[key] = { kode: kodeRaw, rowIndices: [] }; order.push(key); }
+        groups[key].rowIndices.push(i);
+    }
+    _excelGalleryGroups = order.map(function(k) { return groups[k]; });
+}
+
+function renderExcelHasil() {
+    var area = document.getElementById('excel-hasil-area');
+    unobserveContainer('excel-hasil-area');
+    if (!_excelDataRows.length) { area.innerHTML = ''; return; }
+
+    var total = _excelDataRows.length;
+    _excelRenderedCount = 0;
+    _excelThumbRegistry = {};
+    buildExcelGalleryGroups();
+
+    var summaryHtml = '<div class="hasil-header" style="margin-bottom:12px">' +
+        '<span class="hasil-kode">Hasil Excel + Foto</span>' +
+        '<span class="hasil-count">' + total + ' baris — ' + _excelFoundCount + ' cocok foto, ' + (total - _excelFoundCount) + ' tidak ditemukan' +
+        (total > EXCEL_PAGE_SIZE ? ' — ditampilkan bertahap' : '') + '</span>' +
+        '<span class="switch-container" style="margin-left:auto">' +
+        '<button class="switch-btn' + (_excelViewMode === 'gallery' ? ' active' : '') + '" onclick="setExcelViewMode(\'gallery\')">Gallery</button>' +
+        '<button class="switch-btn' + (_excelViewMode === 'table' ? ' active' : '') + '" onclick="setExcelViewMode(\'table\')">Tabel</button>' +
+        '</span>' +
+        '</div>';
+
+    if (_excelViewMode === 'table') {
+        var theadHtml = '<thead><tr>' +
+            _excelHeaders.map(function(h) { return '<th>' + escHtml(h) + '</th>'; }).join('') +
+            '<th>Foto</th></tr></thead>';
+        area.innerHTML = summaryHtml +
+            '<div class="excel-table-wrap"><table class="excel-table">' + theadHtml + '<tbody id="excel-tbody"></tbody></table></div>' +
+            '<div id="excel-load-more-wrap" style="text-align:center;margin-top:16px"></div>';
+    } else {
+        area.innerHTML = summaryHtml +
+            '<div class="gallery-grid" id="excel-gallery-grid"></div>' +
+            '<div id="excel-load-more-wrap" style="text-align:center;margin-top:16px"></div>';
+    }
+
+    renderExcelNextPage();
+}
+
+// Bangun 1 baris <tr> tabel excel untuk index rIdx. Dipanggil per-item oleh
+// appendInChunks di renderExcelNextPage (mode tabel).
+function buildExcelTableRow(rIdx) {
+    var row = _excelDataRows[rIdx];
+    var kodeRaw = String(row[_excelKodeColIdx] || '').trim();
+    var hits = _excelRowPhotos[rIdx];
+
+    var tr = document.createElement('tr');
+    if (hits.length === 0) tr.className = 'row-notfound';
+
+    var cellsHtml = _excelHeaders.map(function(h, cIdx) {
+        var val = row[cIdx] !== undefined ? String(row[cIdx]) : '';
+        var cls = (cIdx === _excelKodeColIdx) ? ' class="excel-kode-cell"' : '';
+        return '<td' + cls + '>' + escHtml(val) + '</td>';
+    }).join('');
+
+    var photoHtml;
+    if (!kodeRaw) {
+        photoHtml = '<td><span class="excel-nf">kode kosong</span></td>';
+    } else if (hits.length === 0) {
+        photoHtml = '<td><span class="excel-nf">✕ tidak ditemukan</span></td>';
+    } else {
+        var thumbs = hits.slice(0, 4).map(function(item, pIdx) {
+            _excelThumbRegistry[item.path] = item;
+            return '<div class="foto-img-wrap" style="width:44px;height:44px;flex-shrink:0;border-radius:6px;border:1px solid var(--border-hi)">' +
+                '<div class="skeleton"></div>' +
+                '<img class="excel-thumb" data-path="' + escHtml(item.path) + '" ' +
+                'onclick="excelOpenLightbox(' + rIdx + ',' + pIdx + ')" alt="' + escHtml(item.path) + '">' +
+                '</div>';
+        }).join('');
+        var more = hits.length > 4 ? '<span class="excel-thumb-more">+' + (hits.length - 4) + '</span>' : '';
+        photoHtml = '<td><div class="excel-photo-cell">' + thumbs + more + '</div></td>';
+    }
+    tr.innerHTML = cellsHtml + photoHtml;
+
+    // Sama seperti gallery card: foto cuma di-load saat baris tabel ini
+    // kelihatan di layar, bukan langsung begitu baris ditambahkan ke DOM.
+    var thumbImgs = tr.querySelectorAll('img[data-path]');
+    for (var ti = 0; ti < thumbImgs.length; ti++) _thumbObserver.observe(thumbImgs[ti]);
+    return tr;
+}
+
+// Bangun 1 kartu gallery excel untuk index gi di _excelGalleryGroups. Dipanggil
+// per-item oleh appendInChunks di renderExcelNextPage (mode gallery).
+function buildExcelGalleryCard(gi) {
+    var kodeHeader = _excelHeaders[_excelKodeColIdx] || 'Kode';
+    var otherCols = _excelHeaders.map(function(h, i) { return i; }).filter(function(i) { return i !== _excelKodeColIdx; });
+    var group = _excelGalleryGroups[gi];
+    var rowIndices = group.rowIndices;
+
+    var repIdx = rowIndices[0];
+    for (var ri = 0; ri < rowIndices.length; ri++) {
+        if (_excelRowPhotos[rowIndices[ri]].length > 0) { repIdx = rowIndices[ri]; break; }
+    }
+    var repRow = _excelDataRows[repIdx];
+    var kode = String(repRow[_excelKodeColIdx] || '').trim();
+    var label = otherCols.slice(0, 2).map(function(ci) { return repRow[ci] !== undefined ? String(repRow[ci]) : ''; }).filter(Boolean).join(' · ');
+
+    var combinedHits = [];
+    var seenPaths = {};
+    rowIndices.forEach(function(ri2) {
+        (_excelRowPhotos[ri2] || []).forEach(function(item) {
+            if (!seenPaths[item.path]) { seenPaths[item.path] = true; combinedHits.push(item); }
+        });
+    });
+
+    var hasStack = rowIndices.length > 1;
+    var card = document.createElement('div');
+    card.className = 'gallery-card' + (combinedHits.length === 0 ? ' excel-card-empty' : '') + (hasStack ? ' has-dup' : '');
+    if (combinedHits.length > 0) {
+        card.onclick = (function(hits, rIdxs) { return function() { openDupLightbox(hits, rIdxs); }; })(combinedHits, rowIndices);
+    }
+
+    var imgWrapInner;
+    if (combinedHits.length > 0) {
+        _excelThumbRegistry[combinedHits[0].path] = combinedHits[0];
+        imgWrapInner = '<div class="skeleton"></div><img data-path="' + escHtml(combinedHits[0].path) + '" class="gallery-img" alt="' + escHtml(kode) + '">';
+    } else {
+        imgWrapInner =
+            '<div class="excel-card-noimg"><span>🖼️</span><span>' + (kode ? 'TIDAK ADA FOTO' : 'KODE KOSONG') + '</span></div>';
+    }
+    var moreBadge = combinedHits.length > 1 ? '<span class="gallery-badge excel-badge-more">+' + (combinedHits.length - 1) + ' foto</span>' : '';
+    var stackBadge = hasStack ? '<span class="gallery-badge excel-badge-stack">×' + rowIndices.length + ' baris</span>' : '';
+
+    card.innerHTML =
+        '<div class="gallery-img-container">' + imgWrapInner +
+        '<div class="gallery-badge-row"><span class="gallery-badge excel-badge-kode">' + escHtml(kode || '—') + '</span>' + stackBadge + moreBadge + '</div>' +
+        '</div>' +
+        '<div class="gallery-info"><div class="gallery-label" title="' + escHtml(label) + '">' +
+        (escHtml(label) || '<span class="excel-nf-inline">' + escHtml(kodeHeader) + '</span>') + '</div></div>';
+
+    // Sebelumnya foto langsung di-load (img.src langsung diisi) begitu kartu
+    // dibuat, walau kartunya belum kelihatan di layar. Sekarang pakai
+    // _thumbObserver yang sama dengan grid pencarian utama: foto baru diisi
+    // saat kartu benar-benar masuk viewport, dan src dilepas lagi saat keluar
+    // layar jauh — jadi jumlah foto yang "hidup" di memori/GPU sekaligus tetap
+    // kecil walau hasilnya ratusan/ribuan baris.
+    var galleryImg = card.querySelector('img[data-path]');
+    if (galleryImg) _thumbObserver.observe(galleryImg);
+
+    // Daftarkan ke proximity observer juga, sama seperti kartu foto biasa,
+    // supaya GPU layer (will-change) hanya aktif utk kartu yang dekat viewport.
+    card.setAttribute('data-prx', '1');
+    _proximityObserver.observe(card);
+    return card;
+}
+
+function renderExcelNextPage() {
+    if (_excelViewMode === 'table') {
+        var end = Math.min(_excelRenderedCount + EXCEL_PAGE_SIZE, _excelDataRows.length);
+        var tbody = document.getElementById('excel-tbody');
+        if (!tbody) return;
+        var startIdx = _excelRenderedCount;
+        appendInChunks(startIdx, end, buildExcelTableRow, tbody, function() {
+            _excelRenderedCount = end;
+            updateExcelLoadMoreWrap();
+        }, null, 15);
+    } else {
+        var grid = document.getElementById('excel-gallery-grid');
+        if (!grid) return;
+        var gend = Math.min(_excelRenderedCount + EXCEL_PAGE_SIZE, _excelGalleryGroups.length);
+        var gstartIdx = _excelRenderedCount;
+        appendInChunks(gstartIdx, gend, buildExcelGalleryCard, grid, function() {
+            _excelRenderedCount = gend;
+            updateExcelLoadMoreWrap();
+        }, null, 15);
+    }
+}
+
+function updateExcelLoadMoreWrap() {
+    var moreWrap = document.getElementById('excel-load-more-wrap');
+    if (moreWrap) {
+        var totalUnits = (_excelViewMode === 'table') ? _excelDataRows.length : _excelGalleryGroups.length;
+        var unitLabel = (_excelViewMode === 'table') ? 'baris' : 'kode';
+        if (_excelRenderedCount < totalUnits) {
+            moreWrap.innerHTML = '<button class="btn-excel-go" onclick="renderExcelNextPage()">▼ Muat ' +
+                Math.min(EXCEL_PAGE_SIZE, totalUnits - _excelRenderedCount) + ' ' + unitLabel + ' lagi (' +
+                _excelRenderedCount + ' / ' + totalUnits + ')</button>';
+        } else {
+            moreWrap.innerHTML = '';
+        }
+    }
+}
+
+// Muat langsung semua thumbnail yang baru ditambahkan ke container (tanpa nunggu
+// scroll/observer dan tanpa antrian) — sama seperti cara kotak pencarian kode
+// menampilkan foto, supaya kecepatan tampil konsisten & terasa instan.
+// (Sudah tidak dipakai lagi — dulu buat load semua thumb excel langsung tanpa
+// nunggu kelihatan di layar. Sekarang gallery card & baris tabel excel pakai
+// _thumbObserver, sama seperti grid pencarian utama. Dibiarkan di sini kalau-
+// kalau masih dibutuhkan lagi nanti.)
+function directLoadThumbs(container) {
+    var imgs = container.querySelectorAll('img[data-path]:not([data-loaded])');
+    Array.prototype.forEach.call(imgs, function(img) {
+        img.setAttribute('data-loaded', '1');
+        var item = _excelThumbRegistry[img.dataset.path];
+        if (!item) return;
+        var sk = img.previousElementSibling;
+        img.onload = function() { if (sk && sk.className === 'skeleton') sk.remove(); img.style.display = 'block'; };
+        img.onerror = function() { if (sk) { sk.style.background = 'rgba(239,68,68,0.1)'; sk.textContent = 'Gagal'; } };
+        img.src = getCachedUrl(item);
+    });
+}
+function excelOpenLightbox(rowIdx, photoIdx) {
+    var hits = _excelRowPhotos[rowIdx] || [];
+    if (!hits.length) return;
+    _lbMode = 'array';
+    _lbExcelRows = [rowIdx];
+    _lbUrls = hits.map(function(item) {
+        return { url: getCachedUrl(item), path: item.path };
+    });
+    _lbIdx = photoIdx;
+    updateLightbox();
+    document.getElementById('lightbox').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+// ── RIWAYAT ───────────────────────────────────────────────────────────────────
+function tambahRiwayat(kode) {
+    _riwayat = _riwayat.filter(function(k) { return k !== kode; });
+    _riwayat.unshift(kode);
+    if (_riwayat.length > 12) _riwayat.pop();
+    renderRiwayat();
+}
+function renderRiwayat() {
+    var area = document.getElementById('riwayat-area');
+    var chips = document.getElementById('riwayat-chips');
+    if (_riwayat.length === 0) { area.style.display = 'none'; return; }
+    area.style.display = '';
+    chips.innerHTML = _riwayat.map(function(k) {
+        return '<span class="chip" onclick="scanFromRiwayat(\'' + escHtml(k) + '\')">' + escHtml(k) + '</span>';
+    }).join('');
+}
+function scanFromRiwayat(kode) {
+    document.getElementById('scan-input').value = kode;
+    doFotoSearch();
+}
+
+// ── LIGHTBOX KODE DIGABUNG ────────────────────────────────────────────────────
+// Muncul saat badge kode foto (yang punya varian duplikat, mis. "-1"/"(1)")
+// diklik. Menampilkan foto ASLI satu-satu dari tiap kode/prefix yang digabung,
+// bisa geser kiri/kanan, dan nama file (termasuk prefix-nya) tampil di lb-path.
+function openDupLightbox(variantItems, excelRowIndices) {
+    if (!variantItems || !variantItems.length) return;
+    _lbMode = 'array';
+    _lbExcelRows = excelRowIndices || [];
+    _lbUrls = variantItems.map(function(it) {
+        return { url: getCachedUrl(it), path: it.path };
+    });
+    _lbIdx = 0;
+    updateLightbox();
+    document.getElementById('lightbox').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+var _toastTimer;
+function showToast(msg, type) {
+    var colors = {
+        green: { bg: 'rgba(0,229,160,0.12)', border: 'rgba(0,229,160,0.35)', text: '#00e5a0' },
+        amber: { bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.35)', text: '#f59e0b' },
+        red:   { bg: 'rgba(239,68,68,0.12)',  border: 'rgba(239,68,68,0.35)',  text: '#ef4444' },
+    };
+    var c = colors[type] || colors.green;
+    var t = document.getElementById('toast');
+    if (!t) {
+        t = document.createElement('div');
+        t.id = 'toast';
+        t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 20px;border-radius:10px;font-family:Space Mono,monospace;font-size:0.75rem;font-weight:700;border:1px solid;transition:opacity 0.3s;pointer-events:none;max-width:90vw;text-align:center;letter-spacing:0.04em';
+        document.body.appendChild(t);
+    }
+    t.style.background = c.bg;
+    t.style.borderColor = c.border;
+    t.style.color = c.text;
+    t.textContent = msg;
+    t.style.opacity = '1';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function() { t.style.opacity = '0'; }, 3000);
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── CEK DUKUNGAN BROWSER ─────────────────────────────────────────────────────
+(function checkSupport() {
+    var testInput = document.getElementById('folder-input');
+    var supported = 'webkitdirectory' in testInput || 'directory' in testInput;
+    console.log('[FotoLookup] webkitdirectory supported:', supported);
+    if (!supported) {
+        showToast('Browser ini tidak mendukung pilih folder. Pakai Chrome atau Edge versi terbaru.', 'red');
+        document.getElementById('folder-sub').textContent = '⚠️ Browser tidak didukung — pakai Chrome/Edge';
+    }
+})();
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+document.getElementById('hasil-area').innerHTML =
+    '<div class="empty-state">' +
+    '<div class="es-icon">📁</div>' +
+    '<div class="es-title">Pilih folder foto dulu</div>' +
+    '<div class="es-sub">Klik kotak di atas → pilih folder Y:\<br>' +
+    'Browser akan scan semua gambar, lalu siap dicari pakai kode barcode.</div>' +
+    '</div>';
+</script>
+</body>
+</html>
