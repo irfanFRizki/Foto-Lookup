@@ -463,6 +463,20 @@ body {
 }
 .excel-nf-inline { color: var(--muted); font-style: italic; font-weight: 400; }
 
+/* ── PAGER GALLERY HASIL EXCEL + FOTO ── */
+.excel-pager {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    margin-top: 18px; flex-wrap: wrap;
+}
+.btn-excel-page {
+    font-family: 'Space Mono', monospace; font-size: 0.8rem; font-weight: 700;
+    color: var(--text); background: rgba(167,139,250,0.1); border: 1px solid var(--border-hi);
+    border-radius: 8px; padding: 8px 16px; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.btn-excel-page:hover:not(:disabled) { background: rgba(167,139,250,0.22); border-color: var(--purple); }
+.btn-excel-page:disabled { opacity: 0.35; cursor: not-allowed; }
+.excel-pager-label { font-family: 'Space Mono', monospace; font-size: 0.78rem; color: var(--sec); min-width: 110px; text-align: center; }
+
 /* ── SWITCH TOGGLE (Tabel/Gallery) ── */
 .switch-container {
     display: inline-flex;
@@ -1103,7 +1117,10 @@ body {
         </div>
     </div>
 
-    <!-- 1d. FILTER KOLOM EXCEL -->
+    <!-- 1c. TABEL EXCEL + FOTO -->
+    <div id="excel-hasil-area"></div>
+
+    <!-- 1d. FILTER KOLOM EXCEL (di bagian bawah) -->
     <div class="excel-filter-bar" id="excel-filter-bar">
         <div class="excel-filter-title">🔎 Filter Data Excel</div>
         <div class="excel-filter-grid">
@@ -1145,48 +1162,6 @@ body {
         </div>
         <button class="btn-excel-go" id="ef-reset-btn" onclick="resetExcelFilter()" style="align-self:flex-start">✕ Reset Filter</button>
     </div>
-
-    <!-- 1c. TABEL EXCEL + FOTO -->
-    <div id="excel-hasil-area"></div>
-
-    <!-- 2. PENCARIAN + FILTER (ala index.html) -->
-    <div class="search-card" id="search-card">
-        <div class="search-row">
-            <div class="search-input-wrap">
-                <span class="search-icon">🔍</span>
-                <input type="text" class="search-input" id="scan-input"
-                       placeholder="Scan atau ketik kode / nama file…"
-                       disabled autocomplete="off" autocorrect="off" spellcheck="false"
-                       oninput="triggerFotoSearch()"
-                       onkeydown="if(event.key==='Enter') triggerFotoSearch()">
-            </div>
-            <button class="btn-filter-toggle" id="btn-filter-toggle" onclick="toggleFilterPanel()" disabled>
-                <span>⚙️</span><span>Filter</span>
-            </button>
-        </div>
-
-        <!-- Panel filter expandable -->
-        <div class="filter-panel" id="filter-panel" style="display:none">
-            <div class="filter-field">
-                <label>Mode Pencarian</label>
-                <span class="switch-container">
-                    <button class="switch-btn active" id="mode-btn-partial" onclick="setSearchMode('partial')">Sebagian</button>
-                    <button class="switch-btn" id="mode-btn-exact" onclick="setSearchMode('exact')">Persis</button>
-                </span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Riwayat pencarian -->
-    <div id="riwayat-area" style="display:none">
-        <div class="riwayat-wrap">
-            <span class="riwayat-label">Terakhir:</span>
-            <div id="riwayat-chips"></div>
-        </div>
-    </div>
-
-    <!-- 3. HASIL -->
-    <div id="hasil-area"></div>
 
 
 </div>
@@ -1512,39 +1487,19 @@ function finishIndex(items) {
     document.getElementById('progress-wrap').style.display = 'none';
 
     // Enable input & filter
-    document.getElementById('scan-input').disabled = false;
-    document.getElementById('btn-filter-toggle').disabled = false;
-    document.getElementById('scan-input').focus();
+    // (kotak scan/cari manual sudah dihapus — pencarian sekarang lewat Filter Data Excel)
 
     showToast('✅ ' + _totalFiles.toLocaleString() + ' foto diindex — siap dicari!' +
         (_dupCount > 0 ? ' (' + _dupCount.toLocaleString() + ' duplikat kode ditumpuk jadi 1, klik kode-nya buat lihat semua fotonya)' : ''), 'green');
 
-    // Tampilkan empty state tapi dengan instruksi cari
-    document.getElementById('hasil-area').innerHTML =
-        '<div class="empty-state">' +
-        '<div class="es-icon">🔍</div>' +
-        '<div class="es-title">Index siap</div>' +
-        '<div class="es-sub">Ketik sebagian kode / nama file di kotak atas,<br>hasil akan muncul otomatis.</div>' +
-        '</div>';
-
     maybeAutoRunExcel();
 }
 
-// ── FILTER PANEL ─────────────────────────────────────────────────────────────
+// ── MODE PENCARIAN ───────────────────────────────────────────────────────────
+// (Toggle "⚙️ Filter" & panel Mode Pencarian sudah dihapus dari UI —
+// pencarian selalu pakai mode 'partial'. Variabel & percabangan di
+// triggerFotoSearch tetap dipertahankan supaya logika pencarian tidak berubah.)
 var _searchMode = 'partial'; // 'partial' | 'exact'
-function toggleFilterPanel() {
-    var panel = document.getElementById('filter-panel');
-    var btn = document.getElementById('btn-filter-toggle');
-    var open = panel.style.display !== 'none';
-    panel.style.display = open ? 'none' : 'grid';
-    btn.classList.toggle('open', !open);
-}
-function setSearchMode(mode) {
-    _searchMode = mode;
-    document.getElementById('mode-btn-partial').classList.toggle('active', mode === 'partial');
-    document.getElementById('mode-btn-exact').classList.toggle('active', mode === 'exact');
-    triggerFotoSearch();
-}
 
 // ── NORMALISASI KODE ──────────────────────────────────────────────────────────
 // Menghasilkan array key yang mungkin untuk satu nama file
@@ -1599,7 +1554,6 @@ function expandDupVariants(items) {
 
 // ── CARI + FILTER (live search, banyak foto sekaligus) ────────────────────────
 var _searchDebounce = null;
-var _excelFilterDebounce = null;  // FIX: Separate debounce for Excel filter
 function triggerFotoSearch() {
     clearTimeout(_searchDebounce);
     _searchDebounce = setTimeout(doFotoSearch, 120);
@@ -1640,11 +1594,8 @@ function doFotoSearch() {
 // ── RENDER HASIL (grid banyak foto, ala index.html) ──────────────────────────
 // ── LRU OBJECT URL CACHE ──────────────────────────────────────────────────────
 // Membatasi jumlah blob URL + gambar ter-decode yang hidup bersamaan di memori.
-var _urlLru = new Map(); // key(path) → { url, file, size }
+var _urlLru = new Map(); // key(path) → { url, file }
 var URL_LRU_MAX = 120;
-var _totalCacheSize = 0;
-var MAX_CACHE_SIZE_MB = 50; // Soft limit for total cache size
-
 function getCachedUrl(item) {
     var key = item.path;
     if (_urlLru.has(key)) {
@@ -1653,37 +1604,21 @@ function getCachedUrl(item) {
         return v.url;
     }
     var url = URL.createObjectURL(item.file);
-    var size = item.file.size || 0;
-    _totalCacheSize += size;
-    _urlLru.set(key, { url: url, file: item.file, size: size });
-    
-    // Evict oldest entries if exceeding count OR size limit
-    while (_urlLru.size > URL_LRU_MAX || _totalCacheSize > MAX_CACHE_SIZE_MB * 1024 * 1024) {
+    _urlLru.set(key, { url: url, file: item.file }); // FIX: Simpan file reference
+    if (_urlLru.size > URL_LRU_MAX) {
         var oldestKey = _urlLru.keys().next().value;
-        if (!oldestKey) break;
         var old = _urlLru.get(oldestKey);
         URL.revokeObjectURL(old.url);
-        _totalCacheSize -= (old.size || 0);
         _urlLru.delete(oldestKey);
     }
     return url;
 }
-
 function releaseCachedUrl(path) {
     if (_urlLru.has(path)) {
         var entry = _urlLru.get(path);
         URL.revokeObjectURL(entry.url);
-        _totalCacheSize -= (entry.size || 0);
         _urlLru.delete(path);
     }
-}
-
-function clearAllCachedUrls() {
-    _urlLru.forEach(function(entry) {
-        try { URL.revokeObjectURL(entry.url); } catch(e) {}
-    });
-    _totalCacheSize = 0;
-    _urlLru.clear();
 }
 
 // ── THUMBNAIL ─────────────────────────────────────────────────────────────────
@@ -1787,7 +1722,7 @@ function unobserveContainer(containerId) {
         dequeueThumbLoad(imgs[i]);
     }
     // Juga lepas proximity observer dari semua card di container ini
-    var cards = el.querySelectorAll('.foto-card[data-prx]');
+    var cards = el.querySelectorAll('.foto-card[data-prx], .gallery-card[data-prx]');
     for (var j = 0; j < cards.length; j++) {
         _proximityObserver.unobserve(cards[j]);
         cards[j].removeAttribute('data-gpu');
@@ -1855,7 +1790,6 @@ function renderSearchResults(query, items) {
     _currentQuery = query;
     _renderedCount = 0;
     _thumbRegistry = {};
-    clearAllCachedUrls(); // FIX: Clear URL cache saat render hasil baru untuk hemat memori
 
     if (items.length === 0) {
         area.innerHTML =
@@ -2668,8 +2602,10 @@ function setExcelViewMode(mode) {
 }
 
 var EXCEL_PAGE_SIZE = 60;
+var EXCEL_GALLERY_PAGE_SIZE = 5; // gallery hasil Excel + Foto: 5 kartu per halaman
 var _excelRenderedCount = 0;
 var _excelGalleryGroups = []; // gallery view: baris2 dgn kode sama ditumpuk jadi 1 kartu
+var _excelGalleryPage = 0; // halaman aktif (0-indexed) utk gallery hasil Excel + Foto
 
 // Kelompokkan _excelDataRows berdasarkan nilai kolom kode. Baris dengan kode
 // sama (mis. beberapa SPN untuk 1 kode barang yang sama) digabung jadi 1 grup
@@ -2697,7 +2633,6 @@ function renderExcelHasil() {
     var total = _excelDataRows.length;
     _excelRenderedCount = 0;
     _excelThumbRegistry = {};
-    clearAllCachedUrls(); // FIX: Clear URL cache saat render Excel untuk hemat memori
     buildExcelGalleryGroups();
 
     var summaryHtml = '<div class="hasil-header" style="margin-bottom:12px">' +
@@ -2720,10 +2655,14 @@ function renderExcelHasil() {
     } else {
         area.innerHTML = summaryHtml +
             '<div class="gallery-grid" id="excel-gallery-grid"></div>' +
-            '<div id="excel-load-more-wrap" style="text-align:center;margin-top:16px"></div>';
+            '<div id="excel-gallery-pager"></div>';
     }
 
-    renderExcelNextPage();
+    if (_excelViewMode === 'gallery') {
+        renderExcelGalleryPage(0);
+    } else {
+        renderExcelNextPage();
+    }
 }
 
 // Bangun 1 baris <tr> tabel excel untuk index rIdx. Dipanggil per-item oleh
@@ -2834,40 +2773,71 @@ function buildExcelGalleryCard(gi) {
 }
 
 function renderExcelNextPage() {
-    if (_excelViewMode === 'table') {
-        var end = Math.min(_excelRenderedCount + EXCEL_PAGE_SIZE, _excelDataRows.length);
-        var tbody = document.getElementById('excel-tbody');
-        if (!tbody) return;
-        var startIdx = _excelRenderedCount;
-        appendInChunks(startIdx, end, buildExcelTableRow, tbody, function() {
-            _excelRenderedCount = end;
-            updateExcelLoadMoreWrap();
-        }, null, 15);
-    } else {
-        var grid = document.getElementById('excel-gallery-grid');
-        if (!grid) return;
-        var gend = Math.min(_excelRenderedCount + EXCEL_PAGE_SIZE, _excelGalleryGroups.length);
-        var gstartIdx = _excelRenderedCount;
-        appendInChunks(gstartIdx, gend, buildExcelGalleryCard, grid, function() {
-            _excelRenderedCount = gend;
-            updateExcelLoadMoreWrap();
-        }, null, 15);
-    }
+    // Catatan: sekarang cuma dipakai mode Tabel (infinite "muat lagi").
+    // Mode Gallery pakai renderExcelGalleryPage() dgn navigasi halaman 5 kartu/halaman.
+    var end = Math.min(_excelRenderedCount + EXCEL_PAGE_SIZE, _excelDataRows.length);
+    var tbody = document.getElementById('excel-tbody');
+    if (!tbody) return;
+    var startIdx = _excelRenderedCount;
+    appendInChunks(startIdx, end, buildExcelTableRow, tbody, function() {
+        _excelRenderedCount = end;
+        updateExcelLoadMoreWrap();
+    }, null, 15);
 }
 
 function updateExcelLoadMoreWrap() {
     var moreWrap = document.getElementById('excel-load-more-wrap');
     if (moreWrap) {
-        var totalUnits = (_excelViewMode === 'table') ? _excelDataRows.length : _excelGalleryGroups.length;
-        var unitLabel = (_excelViewMode === 'table') ? 'baris' : 'kode';
+        var totalUnits = _excelDataRows.length;
         if (_excelRenderedCount < totalUnits) {
             moreWrap.innerHTML = '<button class="btn-excel-go" onclick="renderExcelNextPage()">▼ Muat ' +
-                Math.min(EXCEL_PAGE_SIZE, totalUnits - _excelRenderedCount) + ' ' + unitLabel + ' lagi (' +
+                Math.min(EXCEL_PAGE_SIZE, totalUnits - _excelRenderedCount) + ' baris lagi (' +
                 _excelRenderedCount + ' / ' + totalUnits + ')</button>';
         } else {
             moreWrap.innerHTML = '';
         }
     }
+}
+
+// Render 1 halaman gallery hasil Excel + Foto (5 kartu/halaman) beserta
+// tombol navigasi "‹ Sebelumnya" / "Lanjutkan ›" dan label "Halaman x/xx".
+function renderExcelGalleryPage(page) {
+    var grid = document.getElementById('excel-gallery-grid');
+    if (!grid) return;
+    var totalGroups = _excelGalleryGroups.length;
+    var totalPages = Math.max(1, Math.ceil(totalGroups / EXCEL_GALLERY_PAGE_SIZE));
+    if (page < 0) page = 0;
+    if (page > totalPages - 1) page = totalPages - 1;
+    _excelGalleryPage = page;
+
+    unobserveContainer('excel-gallery-grid');
+    grid.innerHTML = '';
+    var startIdx = page * EXCEL_GALLERY_PAGE_SIZE;
+    var endIdx = Math.min(startIdx + EXCEL_GALLERY_PAGE_SIZE, totalGroups);
+    for (var gi = startIdx; gi < endIdx; gi++) {
+        grid.appendChild(buildExcelGalleryCard(gi));
+    }
+    updateExcelGalleryPager(totalPages);
+}
+
+function updateExcelGalleryPager(totalPages) {
+    var wrap = document.getElementById('excel-gallery-pager');
+    if (!wrap) return;
+    var curr = _excelGalleryPage + 1;
+    var prevDisabled = _excelGalleryPage <= 0;
+    var nextDisabled = _excelGalleryPage >= totalPages - 1;
+    wrap.innerHTML =
+        '<div class="excel-pager">' +
+        '<button class="btn-excel-page" onclick="goExcelGalleryPage(' + (_excelGalleryPage - 1) + ')"' + (prevDisabled ? ' disabled' : '') + '>‹ Sebelumnya</button>' +
+        '<span class="excel-pager-label">Halaman ' + curr + ' / ' + totalPages + '</span>' +
+        '<button class="btn-excel-page" onclick="goExcelGalleryPage(' + (_excelGalleryPage + 1) + ')"' + (nextDisabled ? ' disabled' : '') + '>Lanjutkan ›</button>' +
+        '</div>';
+}
+
+function goExcelGalleryPage(page) {
+    renderExcelGalleryPage(page);
+    var area = document.getElementById('excel-hasil-area');
+    if (area && area.scrollIntoView) area.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Muat langsung semua thumbnail yang baru ditambahkan ke container (tanpa nunggu
@@ -2988,13 +2958,8 @@ function escHtml(s) {
 })();
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
-document.getElementById('hasil-area').innerHTML =
-    '<div class="empty-state">' +
-    '<div class="es-icon">📁</div>' +
-    '<div class="es-title">Pilih folder foto dulu</div>' +
-    '<div class="es-sub">Klik kotak di atas → pilih folder Y:\<br>' +
-    'Browser akan scan semua gambar, lalu siap dicari pakai kode barcode.</div>' +
-    '</div>';
+// (Pesan awal "Pilih folder foto dulu" sudah tidak ditampilkan lagi di sini —
+// kotak hasil pencarian manual/scan sudah dihapus dari UI.)
 </script>
 </body>
 </html>
