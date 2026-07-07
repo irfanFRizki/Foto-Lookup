@@ -1,1 +1,1 @@
-foto_lookup_backup.html
+Nothing needs to be added to .gitignore since the changes only include HTML files (foto_lookup_v2.html and foto_lookup.html), which are source files and not build artifacts, dependencies, or temporary files.
