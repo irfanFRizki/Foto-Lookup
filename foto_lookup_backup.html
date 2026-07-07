@@ -1599,7 +1599,6 @@ function expandDupVariants(items) {
 
 // ── CARI + FILTER (live search, banyak foto sekaligus) ────────────────────────
 var _searchDebounce = null;
-var _excelFilterDebounce = null;  // FIX: Separate debounce for Excel filter
 function triggerFotoSearch() {
     clearTimeout(_searchDebounce);
     _searchDebounce = setTimeout(doFotoSearch, 120);
@@ -1640,11 +1639,8 @@ function doFotoSearch() {
 // ── RENDER HASIL (grid banyak foto, ala index.html) ──────────────────────────
 // ── LRU OBJECT URL CACHE ──────────────────────────────────────────────────────
 // Membatasi jumlah blob URL + gambar ter-decode yang hidup bersamaan di memori.
-var _urlLru = new Map(); // key(path) → { url, file, size }
+var _urlLru = new Map(); // key(path) → { url, file }
 var URL_LRU_MAX = 120;
-var _totalCacheSize = 0;
-var MAX_CACHE_SIZE_MB = 50; // Soft limit for total cache size
-
 function getCachedUrl(item) {
     var key = item.path;
     if (_urlLru.has(key)) {
@@ -1653,37 +1649,20 @@ function getCachedUrl(item) {
         return v.url;
     }
     var url = URL.createObjectURL(item.file);
-    var size = item.file.size || 0;
-    _totalCacheSize += size;
-    _urlLru.set(key, { url: url, file: item.file, size: size });
-    
-    // Evict oldest entries if exceeding count OR size limit
-    while (_urlLru.size > URL_LRU_MAX || _totalCacheSize > MAX_CACHE_SIZE_MB * 1024 * 1024) {
+    _urlLru.set(key, { url: url });
+    if (_urlLru.size > URL_LRU_MAX) {
         var oldestKey = _urlLru.keys().next().value;
-        if (!oldestKey) break;
         var old = _urlLru.get(oldestKey);
         URL.revokeObjectURL(old.url);
-        _totalCacheSize -= (old.size || 0);
         _urlLru.delete(oldestKey);
     }
     return url;
 }
-
 function releaseCachedUrl(path) {
     if (_urlLru.has(path)) {
-        var entry = _urlLru.get(path);
-        URL.revokeObjectURL(entry.url);
-        _totalCacheSize -= (entry.size || 0);
+        URL.revokeObjectURL(_urlLru.get(path).url);
         _urlLru.delete(path);
     }
-}
-
-function clearAllCachedUrls() {
-    _urlLru.forEach(function(entry) {
-        try { URL.revokeObjectURL(entry.url); } catch(e) {}
-    });
-    _totalCacheSize = 0;
-    _urlLru.clear();
 }
 
 // ── THUMBNAIL ─────────────────────────────────────────────────────────────────
@@ -1855,7 +1834,6 @@ function renderSearchResults(query, items) {
     _currentQuery = query;
     _renderedCount = 0;
     _thumbRegistry = {};
-    clearAllCachedUrls(); // FIX: Clear URL cache saat render hasil baru untuk hemat memori
 
     if (items.length === 0) {
         area.innerHTML =
@@ -2346,9 +2324,6 @@ function removeExcelFile(fileId) {
         _excelRowPhotos = [];
         _excelFoundCount = 0;
 
-        // FIX: Clear debounce timer saat reset
-        clearExcelFilterDebounce();
-
         var zone = document.getElementById('excel-zone');
         zone.classList.remove('loaded');
         document.getElementById('excel-icon').textContent = '📊';
@@ -2472,13 +2447,6 @@ var _efDebounce = null;
 function triggerExcelFilter() {
     clearTimeout(_efDebounce);
     _efDebounce = setTimeout(applyExcelFilter, 150);
-}
-// FIX: Clear debounce timer saat reset data excel
-function clearExcelFilterDebounce() {
-    if (_efDebounce) {
-        clearTimeout(_efDebounce);
-        _efDebounce = null;
-    }
 }
 
 // ── Referensi pencarian tambahan utk Item Name (tag/chip, digabung dgn logika OR) ──
@@ -2697,7 +2665,6 @@ function renderExcelHasil() {
     var total = _excelDataRows.length;
     _excelRenderedCount = 0;
     _excelThumbRegistry = {};
-    clearAllCachedUrls(); // FIX: Clear URL cache saat render Excel untuk hemat memori
     buildExcelGalleryGroups();
 
     var summaryHtml = '<div class="hasil-header" style="margin-bottom:12px">' +
@@ -2962,13 +2929,8 @@ function showToast(msg, type) {
     t.style.color = c.text;
     t.textContent = msg;
     t.style.opacity = '1';
-    // FIX: Clear existing timer dan buat baru agar toast tidak hilang terlalu cepat
     clearTimeout(_toastTimer);
-    _toastTimer = setTimeout(function() { 
-        t.style.opacity = '0';
-        // Hapus elemen setelah animasi fade-out selesai
-        setTimeout(function() { if (t && t.parentNode) t.parentNode.removeChild(t); }, 300);
-    }, 3000);
+    _toastTimer = setTimeout(function() { t.style.opacity = '0'; }, 3000);
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
