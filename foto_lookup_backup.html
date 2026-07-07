@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Foto Lookup</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
@@ -25,13 +23,8 @@
     --red:       #ef4444;
     --purple:    #a78bfa;
     --blue:      #3b82f6;
-    --pink:      #ec4899;
-    --teal:      #14b8a6;
-    --indigo:    #6366f1;
     --green-glow: 0 0 20px rgba(0,229,160,0.25);
     --cyan-glow:  0 0 20px rgba(0,200,224,0.2);
-    --purple-glow: 0 0 20px rgba(167,139,250,0.2);
-    --amber-glow:  0 0 20px rgba(245,158,11,0.2);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -57,49 +50,40 @@ body {
 
 /* ── TOP BAR ── */
 .topbar {
-    background: linear-gradient(135deg, rgba(21,24,32,0.98), rgba(28,32,48,0.95));
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--surface);
     border-bottom: 1px solid var(--border);
     padding: 0 20px;
-    height: 56px;
+    height: 52px;
     display: flex;
     align-items: center;
     gap: 14px;
     position: sticky;
     top: 0;
     z-index: 100;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 .topbar-logo {
     font-family: 'Space Mono', monospace;
     font-weight: 700;
-    font-size: 0.9rem;
-    background: linear-gradient(135deg, var(--green), var(--cyan));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: 0.82rem;
+    color: var(--green);
     letter-spacing: 0.06em;
     white-space: nowrap;
-    text-shadow: 0 0 20px rgba(0,229,160,0.3);
 }
 .topbar-sep { flex: 1; }
 .badge {
     font-family: 'Space Mono', monospace;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
-    padding: 4px 10px;
-    border-radius: 6px;
+    padding: 3px 9px;
+    border-radius: 5px;
     border: 1px solid;
     letter-spacing: 0.05em;
     white-space: nowrap;
-    transition: all 0.2s ease;
 }
-.badge-green  { color: var(--green);  border-color: rgba(0,229,160,0.4); background: linear-gradient(135deg, rgba(0,229,160,0.12), rgba(0,229,160,0.06)); box-shadow: 0 0 10px rgba(0,229,160,0.1); }
-.badge-amber  { color: var(--amber);  border-color: rgba(245,158,11,0.4); background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.06)); box-shadow: 0 0 10px rgba(245,158,11,0.1); }
+.badge-green  { color: var(--green);  border-color: rgba(0,229,160,0.35); background: rgba(0,229,160,0.08); }
+.badge-amber  { color: var(--amber);  border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.08); }
 .badge-muted  { color: var(--muted);  border-color: var(--border); background: transparent; }
-.badge-red    { color: var(--red);    border-color: rgba(239,68,68,0.4); background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.06)); box-shadow: 0 0 10px rgba(239,68,68,0.1); }
-.badge-purple { color: var(--purple); border-color: rgba(167,139,250,0.4); background: linear-gradient(135deg, rgba(167,139,250,0.12), rgba(167,139,250,0.06)); box-shadow: 0 0 10px rgba(167,139,250,0.1); }
+.badge-red    { color: var(--red);    border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); }
 
 /* ── MAIN LAYOUT ── */
 .main {
@@ -133,54 +117,38 @@ body {
 
 .folder-zone {
     border: 2px dashed var(--border-hi);
-    border-radius: 16px;
-    background: linear-gradient(135deg, rgba(21,24,32,0.6), rgba(28,32,48,0.4));
-    padding: 36px 24px;
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 32px 24px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: border-color 0.2s, background 0.2s;
     position: relative;
-    overflow: hidden;
 }
-.folder-zone::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(0,200,224,0.06), transparent 40%);
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
-}
-.folder-zone:hover::before { opacity: 1; }
 .folder-zone:hover, .folder-zone.drag-over {
     border-color: var(--cyan);
-    background: linear-gradient(135deg, rgba(0,200,224,0.08), rgba(0,229,160,0.04));
-    transform: translateY(-2px);
-    box-shadow: 0 8px 30px rgba(0,200,224,0.15);
+    background: rgba(0,200,224,0.04);
 }
 .folder-zone.loaded {
     border-color: var(--green);
     border-style: solid;
-    background: linear-gradient(135deg, rgba(0,229,160,0.08), rgba(0,200,224,0.04));
+    background: rgba(0,229,160,0.04);
     cursor: default;
-    transform: none;
-    box-shadow: 0 0 20px rgba(0,229,160,0.1);
 }
 .folder-zone input[type=file] {
     position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
 }
 .folder-zone.loaded input[type=file] { cursor: default; pointer-events: none; }
 
-.folder-icon { font-size: 2.8rem; margin-bottom: 12px; line-height: 1; filter: drop-shadow(0 4px 10px rgba(0,200,224,0.2)); }
+.folder-icon { font-size: 2.5rem; margin-bottom: 10px; line-height: 1; }
 .folder-title {
     font-family: 'Space Mono', monospace;
     font-weight: 700;
-    font-size: 0.92rem;
+    font-size: 0.88rem;
     color: var(--text);
-    margin-bottom: 6px;
-    letter-spacing: 0.03em;
+    margin-bottom: 4px;
 }
-.folder-sub { font-size: 0.8rem; color: var(--sec); line-height: 1.5; }
+.folder-sub { font-size: 0.78rem; color: var(--sec); }
 
 /* Progress bar */
 .progress-wrap {
@@ -202,44 +170,21 @@ body {
 /* ── EXCEL ZONE ── */
 .excel-zone {
     border: 2px dashed var(--border-hi);
-    border-radius: 16px;
-    background: linear-gradient(135deg, rgba(21,24,32,0.6), rgba(28,32,48,0.4));
-    padding: 28px 24px;
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 24px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: border-color 0.2s, background 0.2s;
     position: relative;
-    overflow: hidden;
 }
-.excel-zone::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(167,139,250,0.08), transparent 40%);
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
-}
-.excel-zone:hover::before { opacity: 1; }
-.excel-zone:hover { 
-    border-color: var(--purple); 
-    background: linear-gradient(135deg, rgba(167,139,250,0.1), rgba(106,76,133,0.06)); 
-    transform: translateY(-2px);
-    box-shadow: 0 8px 30px rgba(167,139,250,0.15);
-}
-.excel-zone.loaded { 
-    border-color: var(--purple); 
-    border-style: solid; 
-    background: linear-gradient(135deg, rgba(167,139,250,0.08), rgba(106,76,133,0.04)); 
-    cursor: default; 
-    transform: none;
-    box-shadow: 0 0 20px rgba(167,139,250,0.1);
-}
+.excel-zone:hover { border-color: var(--purple); background: rgba(167,139,250,0.04); }
+.excel-zone.loaded { border-color: var(--purple); border-style: solid; background: rgba(167,139,250,0.04); cursor: default; }
 .excel-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
 .excel-zone.loaded input[type=file] { cursor: pointer; pointer-events: auto; }
-.excel-icon { font-size: 2.2rem; margin-bottom: 10px; line-height: 1; filter: drop-shadow(0 4px 10px rgba(167,139,250,0.2)); }
-.excel-title { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 0.9rem; color: var(--text); margin-bottom: 6px; letter-spacing: 0.03em; }
-.excel-sub { font-size: 0.78rem; color: var(--sec); line-height: 1.5; }
+.excel-icon { font-size: 2rem; margin-bottom: 8px; line-height: 1; }
+.excel-title { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 0.86rem; color: var(--text); margin-bottom: 4px; }
+.excel-sub { font-size: 0.76rem; color: var(--sec); }
 
 .excel-file-list {
     display: flex;
@@ -1131,8 +1076,7 @@ body {
     <!-- 1. FOLDER + EXCEL PICKER (satu baris) -->
 <div class="picker-row">
     <div class="folder-zone" id="folder-zone"
-         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
-         onmousemove="onFolderZoneMouseMove(event)">
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
         <input type="file" id="folder-input" webkitdirectory directory multiple
                onchange="handleFolderInput(this.files)">
         <div class="folder-icon" id="folder-icon">📁</div>
@@ -1143,8 +1087,7 @@ body {
         </div>
     </div>
 
-    <div class="excel-zone" id="excel-zone"
-         onmousemove="onExcelZoneMouseMove(event)">
+    <div class="excel-zone" id="excel-zone">
         <input type="file" id="excel-input" accept=".xlsx,.xls,.csv" multiple
                onchange="handleExcelInput(this.files)">
         <div class="excel-icon" id="excel-icon">📊</div>
@@ -1247,24 +1190,7 @@ var IMG_EXT = /\.(jpe?g|png|webp|gif|bmp)$/i;
 // ── FOLDER HANDLING ───────────────────────────────────────────────────────────
 function onDragOver(e) {
     e.preventDefault();
-    var zone = document.getElementById('folder-zone');
-    zone.classList.add('drag-over');
-    // Update mouse position for spotlight effect
-    var rect = zone.getBoundingClientRect();
-    zone.style.setProperty('--mouse-x', (e.clientX - rect.left) + 'px');
-    zone.style.setProperty('--mouse-y', (e.clientY - rect.top) + 'px');
-}
-function onFolderZoneMouseMove(e) {
-    var zone = document.getElementById('folder-zone');
-    var rect = zone.getBoundingClientRect();
-    zone.style.setProperty('--mouse-x', (e.clientX - rect.left) + 'px');
-    zone.style.setProperty('--mouse-y', (e.clientY - rect.top) + 'px');
-}
-function onExcelZoneMouseMove(e) {
-    var zone = document.getElementById('excel-zone');
-    var rect = zone.getBoundingClientRect();
-    zone.style.setProperty('--mouse-x', (e.clientX - rect.left) + 'px');
-    zone.style.setProperty('--mouse-y', (e.clientY - rect.top) + 'px');
+    document.getElementById('folder-zone').classList.add('drag-over');
 }
 function onDragLeave(e) {
     document.getElementById('folder-zone').classList.remove('drag-over');
