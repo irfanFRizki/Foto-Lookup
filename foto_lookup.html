@@ -358,45 +358,46 @@ body {
 
 /* ── TABEL EXCEL + FOTO ── */
 .excel-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
-.excel-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.excel-table { width: 100%; border-collapse: collapse; font-size: 1rem; min-width: 1200px; }
 .excel-table thead th {
     background: var(--surface);
     color: var(--sec);
     font-family: 'Space Mono', monospace;
-    font-size: 0.68rem;
+    font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     text-align: left;
-    padding: 9px 12px;
+    padding: 14px 18px;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
     position: sticky; top: 0;
 }
 .excel-table tbody td {
-    padding: 8px 12px;
+    padding: 14px 18px;
     border-bottom: 1px solid var(--border);
     color: var(--text);
     vertical-align: middle;
+    font-size: 0.95rem;
 }
 .excel-table tbody tr:hover { background: rgba(255,255,255,0.02); }
 .excel-table tbody tr.row-notfound td { opacity: 0.5; }
-.excel-photo-cell { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.excel-photo-cell { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .excel-thumb {
-    width: 44px; height: 44px;
+    width: 56px; height: 56px;
     object-fit: contain;
     background: #fff;
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid var(--border-hi);
     cursor: zoom-in;
     flex-shrink: 0;
 }
 .excel-thumb-more {
     font-family: 'Space Mono', monospace;
-    font-size: 0.66rem;
+    font-size: 0.8rem;
     color: var(--muted);
 }
-.excel-nf { font-family: 'Space Mono', monospace; font-size: 0.68rem; color: var(--red); }
-.excel-kode-cell { font-family: 'Space Mono', monospace; font-weight: 700; color: var(--cyan); }
+.excel-nf { font-family: 'Space Mono', monospace; font-size: 0.85rem; color: var(--red); }
+.excel-kode-cell { font-family: 'Space Mono', monospace; font-weight: 700; color: var(--cyan); font-size: 0.95rem; }
 
 /* ── GALLERY CARD (ala AppSheet, dipakai untuk hasil Excel + Foto) ── */
 .gallery-grid {
